@@ -433,20 +433,20 @@ def load_json(record):
 
 def convert_json_to_bbox(bbox, img_height):
     left_upper = (
-        bbox["0"][0] + PIXELS_TO_SHIFT[0],
-        img_height - bbox["0"][1] + PIXELS_TO_SHIFT[1],
+        bbox["0"][1] + PIXELS_TO_SHIFT[0],
+        bbox["0"][0] + PIXELS_TO_SHIFT[1],
     )
     left_bottom = (
-        bbox["3"][0] + PIXELS_TO_SHIFT[0],
-        img_height - bbox["3"][1] + PIXELS_TO_SHIFT[1],
+        bbox["3"][1] + PIXELS_TO_SHIFT[0],
+        bbox["3"][0] + PIXELS_TO_SHIFT[1],
     )
     right_upper = (
-        bbox["1"][0] + PIXELS_TO_SHIFT[0],
-        img_height - bbox["1"][1] + PIXELS_TO_SHIFT[1],
+        bbox["1"][1] + PIXELS_TO_SHIFT[0],
+        bbox["1"][0] + PIXELS_TO_SHIFT[1],
     )
     right_bottom = (
-        bbox["2"][0] + PIXELS_TO_SHIFT[0],
-        img_height - bbox["2"][1] + PIXELS_TO_SHIFT[1],
+        bbox["2"][1] + PIXELS_TO_SHIFT[0],
+        bbox["2"][0] + PIXELS_TO_SHIFT[1],
     )
 
     x1 = left_upper[0]
@@ -473,10 +473,10 @@ def convert_bbox_to_json(bbox, img_height):
     y2 = bbox[3]
 
     bbox_json = {}
-    bbox_json["0"] = [x1 - PIXELS_TO_SHIFT[0], img_height - y1 + PIXELS_TO_SHIFT[1]]
-    bbox_json["1"] = [x2 - PIXELS_TO_SHIFT[0], img_height - y1 + PIXELS_TO_SHIFT[1]]
-    bbox_json["2"] = [x2 - PIXELS_TO_SHIFT[0], img_height - y2 + PIXELS_TO_SHIFT[1]]
-    bbox_json["3"] = [x1 - PIXELS_TO_SHIFT[0], img_height - y2 + PIXELS_TO_SHIFT[1]]
+    bbox_json["0"] = [y1 - PIXELS_TO_SHIFT[1], x1 - PIXELS_TO_SHIFT[0]]
+    bbox_json["1"] = [y1 - PIXELS_TO_SHIFT[1], x2 - PIXELS_TO_SHIFT[0]]
+    bbox_json["2"] = [y2 - PIXELS_TO_SHIFT[1], x2 - PIXELS_TO_SHIFT[0]]
+    bbox_json["3"] = [y2 - PIXELS_TO_SHIFT[1], x1 - PIXELS_TO_SHIFT[0]]
     return bbox_json
 
 
@@ -916,8 +916,8 @@ class ECGSignalDataset(VisionDataset):
         if self.rotate:
             if not self.test:
                 try:
-                    if json_dict["augment"]["val"]:
-                        image_rotated = rotate(image, json_dict["rotate"]["val"])
+                    if json_dict["augment"]:
+                        image_rotated = rotate(image, json_dict["rotate"])
                     else:
                         image_rotated = image
                 except Exception as e:
@@ -943,7 +943,7 @@ class ECGSignalDataset(VisionDataset):
         if not self.test:
             # Prepare info dict
             info_dict["signal_path"] = self.signal_paths[idx]
-            info_dict["full_mode_lead"] = json_dict["full_mode_lead"]["val"]
+            info_dict["full_mode_lead"] = json_dict["full_mode_lead"]
             info_dict["text_bounding_box"] = json_dict["text_bounding_box"]
             info_dict["lead_bounding_box"] = json_dict["lead_bounding_box"]
             info_dict["grid_text_bounding_box_x"] = json_dict[
@@ -954,10 +954,10 @@ class ECGSignalDataset(VisionDataset):
             ]
             info_dict["x_resolution"] = json_dict["x_resolution"]
             info_dict["y_resolution"] = json_dict["y_resolution"]
-            info_dict["augment"] = json_dict["augment"]["val"]
+            info_dict["augment"] = json_dict["augment"]
             info_dict["lead_name"] = "all"
-            info_dict["x_grid"] = json_dict["x_grid"]["val"]
-            info_dict["y_grid"] = json_dict["y_grid"]["val"]
+            info_dict["x_grid"] = json_dict["x_grid"]
+            info_dict["y_grid"] = json_dict["y_grid"]
             mm_per_pixel_x = get_mm_per_pixel(info_dict["x_grid"])
             mm_per_pixel_y = get_mm_per_pixel(info_dict["y_grid"])
             sec_per_pixel = get_sec_per_pixel(mm_per_pixel_x)
@@ -970,7 +970,7 @@ class ECGSignalDataset(VisionDataset):
             info_dict["mask_path"] = self.masks[idx]
 
             # Load augmented mask
-            if json_dict["augment"]["val"] and self.load_argumented:
+            if json_dict["augment"] and self.load_argumented:
                 mask_augmented = read_image(
                     self.masks[idx].replace(".png", "_augmented.png")
                 )
@@ -986,7 +986,7 @@ class ECGSignalDataset(VisionDataset):
                 info_dict["grid_text_bounding_box_y_augmented"] = json_dict[
                     "grid_text_bounding_box_y_augmented"
                 ]
-                info_dict["rotation"] = json_dict["rotate"]["val"]
+                info_dict["rotation"] = json_dict["rotate"]
             else:
                 mask_augmented = mask
                 info_dict["lead_bounding_box_augmented"] = info_dict[
@@ -1263,7 +1263,7 @@ class Trainer:
                     self.target_transform,
                     self.criterion,
                     self.metrics,
-                    self.dataloarders["val"],
+                    self.dataloarders,
                     self.device,
                 )
             vali_time = ((time.time() - epoch_start_time) / 60) - train_time
@@ -1271,11 +1271,11 @@ class Trainer:
 
             # Evaluate
             epoch_train_loss = train_loss / self.dataset_sizes["train"]
-            epoch_vali_loss = vali_loss / self.dataset_sizes["val"]
+            epoch_vali_loss = vali_loss / self.dataset_sizes
             epoch_train_metrics = [
                 m / self.dataset_sizes["train"] for m in train_metrics
             ]
-            epoch_vali_metrics = [m / self.dataset_sizes["val"] for m in vali_metrics]
+            epoch_vali_metrics = [m / self.dataset_sizes for m in vali_metrics]
             if self.verbose and (self.rank == 0 or not self.run_in_parallel):
                 train_metrics_str = " ".join(
                     [
