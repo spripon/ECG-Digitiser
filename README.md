@@ -1,37 +1,343 @@
-# Python example code for the George B. Moody PhysioNet Challenge 2024
+# Python code for the George B. Moody PhysioNet Challenge 2024
 
 ## What's in this repository?
 
-This repository contains a simple example that illustrates how to format a Python entry for the [George B. Moody PhysioNet Challenge 2024](https://physionetchallenges.org/2024/). If you are participating in the 2024 Challenge, then we recommend using this repository as a template for your entry. You can remove some of the code, reuse other code, and add new code to create your entry. You do not need to use the models, features, and/or libraries in this example for your entry. We encourage a diversity of approaches for the Challenges.
+This repository contains our team's code for a Python entry to the [George B. Moody PhysioNet Challenge 2024](https://physionetchallenges.org/2024/). It builds on the default repository provided by the Challenge. You can try it by running the steps describe below.
 
-For this example, we implemented a random forest model with several simple features. (This simple example is **not** designed to perform well, so you should **not** use it as a baseline for your approach's performance.) You can try it by running the following commands on the Challenge training set. If you are using a relatively recent personal computer, then you should be able to run these commands from start to finish on a small subset (1000 records) of the training data in less than 30 minutes.
+At the moment, it does the following:
+
+- For the example code, we implemented a random forest model with several simple features. (This simple example is **not** designed to perform well, so you should **not** use it as a baseline for your approach's performance.)
+
+
+## How do I get started?
+
+1. Clone this repository `git clone https://github.com/felixkrones/physionet2024.git`
+2. Move into repo `cd physionet2024`
+3. Create a new environment:
+
+    Using pip:
+
+        python3.11 -m venv .venv
+        source .venv/bin/activate
+        pip install --upgrade pip
+        pip install -r requirements.txt
+
+    Using conda:
+
+        conda create --name env-name python=3.11
+        conda activate env-name
+        pip install --upgrade pip
+        pip install -r requirements.txt
+
+    For nnU-Net we need to define the locations for raw data, preprocessed data and trained models, by setting environment variables. Please find instructions [here](https://github.com/MIC-DKFZ/nnUNet/blob/master/documentation/setting_up_paths.md).
+
+    At the moment, the official nnU-Net repository contains a bug and is not working with RGB png images. Please use the following installation instructions for now:
+
+        git clone https://github.com/felixkrones/nnUNet.git
+        cd nnUNet
+        pip install -e .
+
+    To also use nnSAM, run the following after:
+
+        pip install git+https://github.com/ChaoningZhang/MobileSAM.git
+        pip install timm
+        pip install git+https://github.com/Kent0n-Li/nnSAM.git
+
+4. Create the data. So far, only the waveforms are provided with all the metadata in separate files. We a) need to combine the metadata with the header files and b) generate the images from the signals. See the description below on `How do I create data for these scripts?`. This is using the 500Hz images at the moment.
+5. Create your train and test data. We use the splits suggested in `ptbxl_database.csv`. See below under `How do I create train and test data?`.
+6. Prepare the images and masks for the segmentation model. See below under `How do I prepare the images for the segmentation`.
+7. Make changes: Before you change anything, create a new branch: `git checkout -b your_branch`. You should only make changes on `team_code.py`. If you want to make changes on the data split, you can change `create_train_test.py`. If you need new packages, add them to `requirements.txt`. You can use `analysis.ipynb` or create your own notebook for some data analysis and experiments.
+8. Run the code as decribed below under `## How do I run these scripts?`.
+
+
+## How do I create the data for these scripts?
+
+You need xx GB of free storage.
+Downloading the data will need 3-4 GB of space. Step 3 will increase the data from 3 GB to xx GB.
+
+1. Download (and unzip) the [PTB-XL dataset](https://physionet.org/content/ptb-xl/) and [PTB-XL+ dataset](https://physionet.org/content/ptb-xl-plus/). These instructions use `ptb-xl` as the folder name that contains the data for these commands (the full folder name for the PTB-XL dataset is currently `ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3`, and the full folder name for the PTB-XL+ dataset is currently `ptb-xl-a-comprehensive-electrocardiographic-feature-dataset-1.0.1`), but you can replace it with the absolute or relative path on your machine. Replace the name of the folder that contains a file named `ptbxl_database.csv` with `ptb-xl/`. Replace the paths below with the actual path to that folder.
+
+2. Add information from various spreadsheets from the PTB-XL dataset to the WFDB header files.
+
+        python prepare_ptbxl_data.py \
+            -i ptb-xl/records500 \
+            -pd ptb-xl/ptbxl_database.csv \
+            -pm ptb-xl/scp_statements.csv \
+            -sd ptb-xl/12sl_statements.csv \
+            -sm ptb-xl/12slv23ToSNOMED.csv \
+            -o ptb-xl/records500_prepared
+
+    For example:
+
+        python prepare_ptbxl_data.py \
+            -i /data/wolf6245/data/ptb-xl/records500 \
+            -pd /data/wolf6245/data/ptb-xl/ptbxl_database.csv \
+            -pm /data/wolf6245/data/ptb-xlscp_statements.csv \
+            -sd /data/wolf6245/data/ptb-xl/12sl_statements.csv \
+            -sm /data/wolf6245/data/ptb-xl/12slv23ToSNOMED.csv \
+            -o /data/wolf6245/data/ptb-xl/records500_prepared
+
+3. [Generate synthetic ECG images](https://github.com/alphanumericslab/ecg-image-kit/tree/main/codes/ecg-image-generator) on the dataset: (This step is using a separate repository)
+
+    1. Deactivate your current environment: `deactivate`
+    2. Move to the location where you want to install the generator repo: `cd ..`
+    3. Clone the repo: `git clone https://github.com/felixkrones/ecg-image-kit.git`
+    4. Move into generator piece: `cd ecg-image-kit/codes/ecg-image-generator/`
+    5. Create a new environment. For this, follow the instructions in the README of the generator repo. You can define the environment name and the Python version in the `environment_droplet.yml` file.
+    6. Now you can run the following code. Careful though, this can take very long, around 10 min per subfolder (approx. 1000 files) or 4h in total and will increase the necessary disk space by approx. 15x, adding another 8GB for the 500Hz data. To test, better to run it on one single subfolder (e.g., add /00000):
+
+            python gen_ecg_images_from_data_batch.py \
+                -i ptb-xl/records500_prepared \
+                -o ptb-xl/records500_prepared_w_images \
+                --print_header \
+                --store_config 2 \
+                --mask_unplotted_samples
+
+        For example:
+
+            python gen_ecg_images_from_data_batch.py \
+                -i /data/wolf6245/data/ptb-xl/records500_prepared/00000 \
+                -o /data/wolf6245/data/ptb-xl/records500_prepared_w_images/00000 \
+                --print_header \
+                -se 10 \
+                --num_images_per_ecg 4 \
+                --random_add_header 0.8 \
+                --store_text_bounding_box \
+                --mask_unplotted_samples \
+                --bbox \
+                --store_config 2 \
+                --random_dc 0.8 \
+                --fully_random \
+                -rot 5 \
+                --run_in_parallel \
+                --num_workers 28
+                
+    7. Deactivate the environment again, move back to your original repo and activate the environment there again:
+
+            deactivate
+            cd 
+            cd your-repo-path
+            source .venv/bin/activate
+
+4. Add the file locations and other information for the synthetic ECG images to the WFDB header files. (The expected image filenames for record `12345` are of the form `12345-0.png`, `12345-1.png`, etc., which should be in the same folder.) You can use the `ptb-xl/records500` folder for the `train_model` step:
+
+        python prepare_image_data.py \
+            -i ptb-xl/records500_prepared_w_images \
+            -o ptb-xl/records500_prepared_w_images
+
+    For example:
+
+        python prepare_image_data.py \
+            -i /data/wolf6245/data/ptb-xl/records500_prepared_w_images \
+            -o /data/wolf6245/data/ptb-xl/records500_prepared_w_images
+
+5. Remove the waveforms, certain information about the waveforms, and the demographics and classes to create a version of the data for inference. You can use the `ptb-xl/records500_hidden/00000` folder for the `run_model` step, but it would be better to repeat the above steps on a new subset of the data that you will not use to train your model:
+
+        python remove_hidden_data.py \
+            -i ptb-xl/records500_prepared_w_images \
+            -o ptb-xl/records500_prepared_w_images_hidden \
+            --include_images
+
+    For example:
+
+        python remove_hidden_data.py \
+            -i /data/wolf6245/data/ptb-xl/records500_prepared_w_images \
+            -o /data/wolf6245/data/ptb-xl/records500_prepared_w_images_hidden \
+            --include_images
+
+## How do I create train and test data?
+
+We use the suggested splits from `ptbxl_database.csv`. 
+Run the code twice, once for full data and once for inference data:
+
+    python create_train_test.py \
+        -i ptb-xl/records500_prepared_w_images \
+        -d ptb-xl/ptbxl_database.csv \
+        -o ptb-xl/splits500
+
+    python create_train_test.py \
+        -i ptb-xl/records500_prepared_w_images_hidden \
+        -d ptb-xl/ptbxl_database.csv \
+        -o ptb-xl/splits500_hidden
+
+For example:
+
+    python create_train_test.py \
+        -i /data/wolf6245/data/ptb-xl/records500_prepared_w_images \
+        -d /data/wolf6245/data/ptb-xl/ptbxl_database.csv \
+        -o /data/wolf6245/data/ptb-xl/Dataset500_Signals \
+        --rgba_to_rgb \
+        --gray_to_rgb
+
+    python create_train_test.py \
+        -i /data/wolf6245/data/ptb-xl/records500_prepared_w_images_hidden \
+        -d /data/wolf6245/data/ptb-xl/ptbxl_database.csv \
+        -o /data/wolf6245/data/ptb-xl/Dataset500_Signals_hidden \
+        --rgba_to_rgb \
+        --gray_to_rgb
+
+
+## How do I prepare the images for the segmentation?
+
+We train the segmentation model for each signal separately. We need to split the images into single signals using the bounding boxes. This is done by the following code:
+
+    python split_images_to_signals.py \
+        -i ptb-xl/Dataset500_Signals \
+        -o ptb-xl/Dataset200_SingleSignals
+
+For example:
+
+    python split_images_to_signals.py \
+        -i /data/wolf6245/data/ptb-xl/Dataset500_Signals \
+        -o /data/wolf6245/data/ptb-xl/Dataset200_SingleSignals \
+        --run_parallel
+
+Alternatively, we can also train the segmentation model on the full images with a separate class for each signal:
+
+    python prepare_mask_classes.py \
+        -i ptb-xl/Dataset500_Signals \
+        -o ptb-xl/Dataset300_FullImages
+
+For example:
+
+    python prepare_mask_classes.py \
+        -i /data/wolf6245/data/ptb-xl/Dataset500_Signals \
+        -o /data/wolf6245/data/ptb-xl/Dataset300_FullImages
+
+If input_folder is the same as output_folder, only the masks will be updated. The original masks will be stored in subfolders called `_original`.
+
 
 ## How do I run these scripts?
 
-First, you can download and create data for these scripts by following the instructions in the following section.
+### Pre-training
 
-Second, you can install the dependencies for these scripts by creating a Docker image (see below) or [virtual environment](https://docs.python.org/3/library/venv.html) and running
+Before we can run the main pipeline, we need to first train the bbox model and then the segmentation model. The bbox model is trained on the images with the bounding boxes. The segmentation model is trained on the single signals.
 
-    pip install -r requirements.txt
+#### Bbox model
+
+To train the bbox model, run:
+
+    python train_bbox_model.py -t data_folder_train -v data_folder_vali -m model_folder
+
+For example:
+
+    python train_bbox_model.py -t /data/wolf6245/data/ptb-xl/Dataset500_Signals/imagesTr -v /data/wolf6245/data/ptb-xl/Dataset500_Signals/imagesTv -m model --run_in_parallel
+
+#### Segmentation model
+
+To then train the segmentation model, we use [nnU-Net](https://github.com/felixkrones/nnUNet.git); this involves multiple steps:
+
+1. Set the environment variables for nnU-Net.
+
+        # Set environment variables
+        export nnUNet_raw="/data/wolf6245/data/ptb-xl"
+        export nnUNet_preprocessed="/data/wolf6245/src/phd/physionet2024/data/nnUNet_preprocessed"
+        export nnUNet_results="/data/wolf6245/src/phd/physionet2024/data/nnUNet_results"
+
+        # Check
+        echo ${nnUNet_raw}
+
+    If you are planning to use nnSAM, define the model:
+
+        set MODEL_NAME=nnsam
+
+2. Experiment planning and preprocessing
+
+        nnUNetv2_plan_and_preprocess -d DATASET_ID --verify_dataset_integrity
+
+    For example for the single signals:
+
+        nnUNetv2_plan_and_preprocess -d 200 -c 2d --clean --verify_dataset_integrity
+
+    Or for the full images:
+
+        nnUNetv2_plan_and_preprocess -d 300 -c 2d --clean --verify_dataset_integrity
+
+3. Model training
+
+        nnUNetv2_train DATASET_NAME_OR_ID UNET_CONFIGURATION FOLD
+
+    For example for a single fold:
+
+        nnUNetv2_train 200 2d 0 -device cuda --npz
+
+    Or for all folds:
+
+        nnUNetv2_train 200 2d 0 -device cuda --npz
+
+    Or for the full images:
+
+        nnUNetv2_train 300 2d 0 -device cuda
+
+    Or select the device (one per fold):
+
+        CUDA_VISIBLE_DEVICES=0 nnUNetv2_train 300 2d 0
+
+4. Determine the best configuration
+
+        nnUNetv2_find_best_configuration DATASET_NAME_OR_ID -c CONFIGURATIONS
+
+    For example for the single signals:
+
+        nnUNetv2_find_best_configuration 200 -c 2d -f 0
+
+    Or for the full images:
+
+        nnUNetv2_find_best_configuration 300 -c 2d -f 0 --disable_ensembling
+
+5. Inference
+    
+        See instructions in `inference_instructions.txt`
+
+    For example for the single signals:
+
+        nnUNetv2_predict -d Dataset200_SingleSignals -i /data/wolf6245/data/ptb-xl/Dataset200_SingleSignals/imagesTv -o /data/wolf6245/src/phd/physionet2024/data/nnUNet_output -f  0 -tr nnUNetTrainer -c 2d -p nnUNetPlans
+
+    Or for the full images:
+
+        nnUNetv2_predict -d Dataset300_FullImages -i /data/wolf6245/data/ptb-xl/Dataset300_FullImages/imagesTv -o /data/wolf6245/src/phd/physionet2024/data/nnUNet_output -f  0 -tr nnUNetTrainer -c 2d -p nnUNetPlans
+
+6. Postprocessing
+
+        See instructions in `inference_instructions.txt`
+
+    For example for the single signals:
+
+        nnUNetv2_apply_postprocessing -i /data/wolf6245/src/phd/physionet2024/data/nnUNet_output -o /data/wolf6245/src/phd/physionet2024/data/nnUNet_output_pp -pp_pkl_file /data/wolf6245/src/phd/physionet2024/data/nnUNet_results/Dataset200_SingleSignals/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/postprocessing.pkl -np 8 -plans_json /data/wolf6245/src/phd/physionet2024/data/nnUNet_results/Dataset200_SingleSignals/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/plans.json
+
+    Or for the full images:
+
+        nnUNetv2_apply_postprocessing -i /data/wolf6245/src/phd/physionet2024/data/nnUNet_output -o /data/wolf6245/src/phd/physionet2024/data/nnUNet_output_pp -pp_pkl_file /data/wolf6245/src/phd/physionet2024/data/nnUNet_results/Dataset300_FullImages/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/postprocessing.pkl -np 8 -plans_json /data/wolf6245/src/phd/physionet2024/data/nnUNet_results/Dataset300_FullImages/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/plans.json
+
+
+### Challenge pipeline
 
 You can train your model(s) by running
 
-    python train_model.py -d training_data -m model
+    python train_model.py -d training_data -m model -v
+
+For example:
+
+    python train_model.py -d /data/wolf6245/data/ptb-xl/Dataset500_Signals/imagesTr -m model -v
 
 where
 
-- `training_data` (input; required) is a folder with the training data files, including the images and classes (you can use the `ptb-xl/records500/00000` folder from the below steps); and
+- `training_data` (input; required) is a folder with the training data files, including the images and classes (you can use the `ptb-xl/splits_500/imagesTr` folder from the steps before); and
 - `model` (output; required) is a folder for saving your model(s).
 
 We are asking teams to include working training code and a pre-trained model. Please include your pre-trained model in the `model` folder so that we can load it with the below command.
 
 You can run your trained model(s) by running
 
-    python run_model.py -d test_data -m model -o test_outputs
+    python run_model.py -d test_data -m model -o data/test_outputs -v
+
+e.g.
+
+    python run_model.py -d /data/wolf6245/data/ptb-xl/Dataset500_Signals_hidden/imagesTs -m model -o data/test_outputs -v
 
 where
 
-- `test_data` (input; required) is a folder with the validation or test data files, excluding the images and classes (you can use the `ptb-xl/records500_hidden/00000` folder from the below steps, but it would be better to repeat these steps on a new subset of the data that you did not use to train your model);
+- `test_data` (input; required) is a folder with the validation or test data files, excluding the images and diagnoses (you can use the `ptb-xl/Dataset500_Signals_hidden/imagesTs` folder from the steps before);
 - `model` (input; required) is a folder for loading your model(s); and
 - `test_outputs` is a folder for saving your model outputs.
 
@@ -39,62 +345,20 @@ We are asking teams to include working training code and a pre-trained model. Pl
 
 The [Challenge website](https://physionetchallenges.org/2024/#data) provides a training database with a description of the contents and structure of the data files.
 
-You can evaluate your model by pulling or downloading the [evaluation code](https://github.com/physionetchallenges/evaluation-2024) and running
+You can evaluate your model by running
 
-    python evaluate_model.py -d labels -o test_outputs -s scores.csv
+    python evaluate_model.py -d labels -o data/test_outputs -s data/evaluation/scores.csv
+
+e.g.
+
+    python evaluate_model.py -d /data/wolf6245/data/ptb-xl/Dataset500_Signals/imagesTs -o data/test_outputs -s data/evaluation/scores.csv
 
 where
 
-- `labels` is a folder with labels for the data, such as the training database on the PhysioNet webpage (you can use the `ptb-xl/records500/00000` folder from the below steps, but it would be better to repeat these steps on a new subset of the data that you did not use to train your model);
+- `labels` is a folder with labels for the data. This is basically the folder which we used in the step before for test_data (you can use the `ptb-xl/Dataset500_Signals/imagesTs` folder from the steps before);
 - `test_outputs` is a folder containing files with your model's outputs for the data; and
 - `scores.csv` (optional) is file with a collection of scores for your model.
 
-## How do I create data for these scripts?
-
-You can use the scripts in this repository to generate synthetic ECG images for the [PTB-XL dataset](https://www.nature.com/articles/s41597-020-0495-6). You will need to generate or otherwise obtain ECG images before running the above steps.
-
-1. Download (and unzip) the [PTB-XL dataset](https://physionet.org/content/ptb-xl/) and [PTB-XL+ dataset](https://physionet.org/content/ptb-xl-plus/). These instructions use `ptb-xl` as the folder name that contains the data for these commands (the full folder name for the PTB-XL dataset is currently `ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3`, and the full folder name for the PTB-XL dataset is currently `ptb-xl-a-comprehensive-electrocardiographic-feature-dataset-1.0.1`), but you can replace it with the absolute or relative path on your machine.
-
-2. Add information from various spreadsheets from the PTB-XL dataset to the WFDB header files:
-
-        python prepare_ptbxl_data.py \
-            -i  ptb-xl/records500/00000 \
-            -pd ptb-xl/ptbxl_database.csv \
-            -pm ptb-xl/scp_statements.csv \
-            -sd ptb-xl/12sl_statements.csv \
-            -sm ptb-xl/12slv23ToSNOMED.csv \
-            -o  ptb-xl/records500/00000
-
-3. [Generate synthetic ECG images](https://github.com/alphanumericslab/ecg-image-kit/tree/main/codes/ecg-image-generator) on the dataset:
-
-        python gen_ecg_images_from_data_batch.py \
-            -i ptb-xl/records500/00000 \
-            -o ptb-xl/records500/00000 \
-            --print_header \
-            --store_config 2
-
-4. Add the file locations and other information for the synthetic ECG images to the WFDB header files. (The expected image filenames for record `12345` are of the form `12345-0.png`, `12345-1.png`, etc., which should be in the same folder.) You can use the `ptb-xl/records500/00000` folder for the `train_model` step:
-
-        python prepare_image_data.py \
-            -i ptb-xl/records500/00000 \
-            -o ptb-xl/records500/00000
-
-5. Remove the waveforms, certain information about the waveforms, and the demographics and classes to create a version of the data for inference. You can use the `ptb-xl/records500_hidden/00000` folder for the `run_model` step, but it would be better to repeat the above steps on a new subset of the data that you will not use to train your model:
-
-        python gen_ecg_images_from_data_batch.py \
-            -i ptb-xl/records500/00000 \
-            -o ptb-xl/records500_hidden/00000 \
-            --print_header \
-            --mask_unplotted_samples
-
-        python prepare_image_data.py \
-            -i ptb-xl/records500_hidden/00000 \
-            -o ptb-xl/records500_hidden/00000
-
-        python remove_hidden_data.py \
-            -i ptb-xl/records500_hidden/00000 \
-            -o ptb-xl/records500_hidden/00000 \
-            --include_images
 
 ## Which scripts I can edit?
 
@@ -146,13 +410,17 @@ If you have trouble running your code, then please try the follow steps to run t
 
         user@computer:~/example$ cd python-example-2024/
 
-        user@computer:~/example/python-example-2024$ docker build -t image .
+        user@computer:~/example/python-example-2024$ sudo docker build -t image .
+
+        ------ IF THIS FAILS, TRY: Delete the line `"credsStore": "desktop",` from `~/.docker/config.json` and try again. ------
 
         Sending build context to Docker daemon  [...]kB
         [...]
         Successfully tagged image:latest
 
         user@computer:~/example/python-example-2024$ docker run -it -v ~/example/model:/challenge/model -v ~/example/test_data:/challenge/test_data -v ~/example/test_outputs:/challenge/test_outputs -v ~/example/training_data:/challenge/training_data image bash
+
+        docker run -it -v /data/wolf6245/src/phd/physionet2024/model:/challenge/model -v /data/wolf6245/data/ptb-xl/Dataset500_Signals/imagesTs:/challenge/test_data -v /data/wolf6245/src/phd/physionet2024/data/test_outputs:/challenge/test_outputs -v /data/wolf6245/data/ptb-xl/Dataset500_Signals/imagesTr:/challenge/training_data image bash
 
         root@[...]:/challenge# ls
             Dockerfile             README.md         test_outputs
@@ -170,11 +438,11 @@ If you have trouble running your code, then please try the follow steps to run t
         root@[...]:/challenge# exit
         Exit
 
+
+---------------------------------------------------------------------------------------
 ## What else do I need?
 
 This repository does not include data or the code for generating ECG images. Please see the above instructions for how to download and prepare the data.
-
-This repository does not include code for evaluating your entry. Please see the [evaluation code repository](https://github.com/physionetchallenges/evaluation-2024) for code and instructions for evaluating your entry using the Challenge scoring metric.
 
 ## How do I learn more? How do I share more?
 
@@ -187,3 +455,13 @@ Please see the [Challenge website](https://physionetchallenges.org/2024/) for mo
 * [Evaluation code](https://github.com/physionetchallenges/evaluation-2024)
 * [Frequently asked questions (FAQ) for this year's Challenge](https://physionetchallenges.org/2024/faq/)
 * [Frequently asked questions (FAQ) about the Challenges in general](https://physionetchallenges.org/faq/)
+
+
+## Credits
+
+- We used nnU-Net:
+
+        Isensee, F., Jaeger, P. F., Kohl, S. A., Petersen, J., & Maier-Hein, K. H. (2021). nnU-Net: a self-configuring method for deep learning-based biomedical image segmentation. Nature methods, 18(2), 203-211.
+
+- The base for this repository was [PhysioNet 2024](https://github.com/physionetchallenges/python-example-2024) by the PhysioNet team.
+
