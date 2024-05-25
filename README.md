@@ -63,8 +63,8 @@ Downloading the data will need 3-4 GB of space. Step 3 will increase the data fr
             -i ptb-xl/records500 \
             -pd ptb-xl/ptbxl_database.csv \
             -pm ptb-xl/scp_statements.csv \
-            -sd ptb-xl/12sl_statements.csv \
-            -sm ptb-xl/12slv23ToSNOMED.csv \
+            -sd ptb-xl-p/labels/12sl_statements.csv \
+            -sm ptb-xl-p/labels/mapping/12slv23ToSNOMED.csv \
             -o ptb-xl/records500_prepared
 
     For example:
@@ -72,9 +72,9 @@ Downloading the data will need 3-4 GB of space. Step 3 will increase the data fr
         python prepare_ptbxl_data.py \
             -i /data/wolf6245/data/ptb-xl/records500 \
             -pd /data/wolf6245/data/ptb-xl/ptbxl_database.csv \
-            -pm /data/wolf6245/data/ptb-xlscp_statements.csv \
-            -sd /data/wolf6245/data/ptb-xl/12sl_statements.csv \
-            -sm /data/wolf6245/data/ptb-xl/12slv23ToSNOMED.csv \
+            -pm /data/wolf6245/data/ptb-xl/scp_statements.csv \
+            -sd /data/wolf6245/data/ptb-xl-p/labels/12sl_statements.csv \
+            -sm /data/wolf6245/data/ptb-xl-p/labels/mapping/12slv23ToSNOMED.csv \
             -o /data/wolf6245/data/ptb-xl/records500_prepared
 
 3. [Generate synthetic ECG images](https://github.com/alphanumericslab/ecg-image-kit/tree/main/codes/ecg-image-generator) on the dataset: (This step is using a separate repository)
