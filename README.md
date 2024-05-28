@@ -165,7 +165,8 @@ For example:
         --gray_to_rgb \
         --mask \
         --mask_multilabel \
-        --rotate_image
+        --rotate_image \
+        --num_workers 8
 
 
 ## How do I run these scripts?
