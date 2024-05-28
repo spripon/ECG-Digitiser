@@ -70,12 +70,12 @@ Downloading the data will need 3-4 GB of space. Step 3 will increase the data fr
     For example:
 
         python prepare_ptbxl_data.py \
-            -i /data/wolf6245/data/ptb-xl/records500/00000 \
+            -i /data/wolf6245/data/ptb-xl/records500 \
             -pd /data/wolf6245/data/ptb-xl/ptbxl_database.csv \
             -pm /data/wolf6245/data/ptb-xl/scp_statements.csv \
             -sd /data/wolf6245/data/ptb-xl-p/labels/12sl_statements.csv \
             -sm /data/wolf6245/data/ptb-xl-p/labels/mapping/12slv23ToSNOMED.csv \
-            -o /data/wolf6245/data/ptb-xl/records500_prepared/00000
+            -o /data/wolf6245/data/ptb-xl/records500_prepared
 
 3. [Generate synthetic ECG images](https://github.com/alphanumericslab/ecg-image-kit/tree/main/codes/ecg-image-generator) on the dataset: (This step is using a separate repository)
 
@@ -96,21 +96,22 @@ Downloading the data will need 3-4 GB of space. Step 3 will increase the data fr
         For example:
 
             python gen_ecg_images_from_data_batch.py \
-                -i /data/wolf6245/data/ptb-xl/records500_prepared/00000 \
-                -o /data/wolf6245/data/ptb-xl/records500_prepared_w_images/00000 \
+                -i /data/wolf6245/data/ptb-xl/records500_prepared \
+                -o /data/wolf6245/data/ptb-xl/records500_prepared_w_images \
                 -se 10 \
                 --mask_unplotted_samples \
                 --print_header \
                 --store_config 2 \
                 --lead_name_bbox \
                 --lead_bbox \
-                --random_print_header 0.8 \
-                --calibration_pulse 0.8 \
-                --random_bw 0.1 \
+                --random_print_header 0.7 \
+                --calibration_pulse 0.6 \
                 --fully_random \
                 --add_qr_code \
                 -rot 10 \
                 --num_images_per_ecg 4 \
+                --random_bw 0.1 \
+
                 --run_in_parallel \
                 --num_workers 8
                 
