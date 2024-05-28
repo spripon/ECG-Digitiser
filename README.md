@@ -11,8 +11,8 @@ At the moment, it does the following:
 
 ## How do I get started?
 
-1. Clone this repository `git clone https://github.com/felixkrones/physionet2024.git`
-2. Move into repo `cd physionet2024`
+1. Clone this repository `git clone https://github.com/felixkrones/physionet24.git`
+2. Move into repo `cd physionet24`
 3. Create a new environment:
 
     Using pip:
@@ -70,12 +70,12 @@ Downloading the data will need 3-4 GB of space. Step 3 will increase the data fr
     For example:
 
         python prepare_ptbxl_data.py \
-            -i /Users/Felix_Krones/code/data/ptb-xl/records500/00000 \
-            -pd /Users/Felix_Krones/code/data/ptb-xl/ptbxl_database.csv \
-            -pm /Users/Felix_Krones/code/data/ptb-xl/scp_statements.csv \
-            -sd /Users/Felix_Krones/code/data/ptb-xl-p/labels/12sl_statements.csv \
-            -sm /Users/Felix_Krones/code/data/ptb-xl-p/labels/mapping/12slv23ToSNOMED.csv \
-            -o /Users/Felix_Krones/code/data/ptb-xl/records500_prepared/00000
+            -i /data/wolf6245/data/ptb-xl/records500/00000 \
+            -pd /data/wolf6245/data/ptb-xl/ptbxl_database.csv \
+            -pm /data/wolf6245/data/ptb-xl/scp_statements.csv \
+            -sd /data/wolf6245/data/ptb-xl-p/labels/12sl_statements.csv \
+            -sm /data/wolf6245/data/ptb-xl-p/labels/mapping/12slv23ToSNOMED.csv \
+            -o /data/wolf6245/data/ptb-xl/records500_prepared/00000
 
 3. [Generate synthetic ECG images](https://github.com/alphanumericslab/ecg-image-kit/tree/main/codes/ecg-image-generator) on the dataset: (This step is using a separate repository)
 
@@ -96,8 +96,8 @@ Downloading the data will need 3-4 GB of space. Step 3 will increase the data fr
         For example:
 
             python gen_ecg_images_from_data_batch.py \
-                -i /Users/Felix_Krones/code/data/ptb-xl/records500_prepared/00000 \
-                -o /Users/Felix_Krones/code/data/ptb-xl/records500_prepared_w_images/00000 \
+                -i /data/wolf6245/data/ptb-xl/records500_prepared/00000 \
+                -o /data/wolf6245/data/ptb-xl/records500_prepared_w_images/00000 \
                 -se 10 \
                 --mask_unplotted_samples \
                 --print_header \
@@ -128,8 +128,8 @@ Downloading the data will need 3-4 GB of space. Step 3 will increase the data fr
     For example:
 
         python prepare_image_data.py \
-            -i /Users/Felix_Krones/code/data/ptb-xl/records500_prepared_w_images \
-            -o /Users/Felix_Krones/code/data/ptb-xl/records500_prepared_w_images
+            -i /data/wolf6245/data/ptb-xl/records500_prepared_w_images \
+            -o /data/wolf6245/data/ptb-xl/records500_prepared_w_images
 
 5. Remove the waveforms, certain information about the waveforms, and the demographics and classes to create a version of the data for inference. You can use the `ptb-xl/records500_hidden/00000` folder for the `run_model` step, but it would be better to repeat the above steps on a new subset of the data that you will not use to train your model:
 
@@ -141,8 +141,8 @@ Downloading the data will need 3-4 GB of space. Step 3 will increase the data fr
     For example:
 
         python remove_hidden_data.py \
-            -i /Users/Felix_Krones/code/data/ptb-xl/records500_prepared_w_images \
-            -o /Users/Felix_Krones/code/data/ptb-xl/records500_prepared_w_images_hidden \
+            -i /data/wolf6245/data/ptb-xl/records500_prepared_w_images \
+            -o /data/wolf6245/data/ptb-xl/records500_prepared_w_images_hidden \
             --include_images
 
 ## How do I create train and test data?
@@ -158,9 +158,9 @@ Run the code twice, once for full data and once for inference data:
 For example:
 
     python create_train_test.py \
-        -i /Users/Felix_Krones/code/data/ptb-xl/records500_prepared_w_images \
-        -d /Users/Felix_Krones/code/data/ptb-xl/ptbxl_database.csv \
-        -o /Users/Felix_Krones/code/data/ptb-xl/Dataset500_Signals \
+        -i /data/wolf6245/data/ptb-xl/records500_prepared_w_images \
+        -d /data/wolf6245/data/ptb-xl/ptbxl_database.csv \
+        -o /data/wolf6245/data/ptb-xl/Dataset500_Signals \
         --rgba_to_rgb \
         --gray_to_rgb \
         --mask \
@@ -182,7 +182,7 @@ To train the bbox model, run:
 
 For example:
 
-    python train_bbox_model.py -t /Users/Felix_Krones/code/data/ptb-xl/Dataset500_Signals/imagesTr -v /Users/Felix_Krones/code/data/ptb-xl/Dataset500_Signals/imagesTv -m model --run_in_parallel
+    python train_bbox_model.py -t /data/wolf6245/data/ptb-xl/Dataset500_Signals/imagesTr -v /data/wolf6245/data/ptb-xl/Dataset500_Signals/imagesTv -m model --run_in_parallel
 
 #### Segmentation model
 
@@ -191,9 +191,9 @@ To then train the segmentation model, we use [nnU-Net](https://github.com/felixk
 1. Set the environment variables for nnU-Net.
 
         # Set environment variables
-        export nnUNet_raw="/Users/Felix_Krones/code/data/ptb-xl"
-        export nnUNet_preprocessed="/data/wolf6245/src/phd/physionet2024/data/nnUNet_preprocessed"
-        export nnUNet_results="/data/wolf6245/src/phd/physionet2024/data/nnUNet_results"
+        export nnUNet_raw="/data/wolf6245/data/ptb-xl"
+        export nnUNet_preprocessed="/data/wolf6245/src/phd/physionet24/model/nnUNet_preprocessed"
+        export nnUNet_results="/data/wolf6245/src/phd/physionet24/model/nnUNet_results"
 
         # Check
         echo ${nnUNet_raw}
@@ -208,11 +208,11 @@ To then train the segmentation model, we use [nnU-Net](https://github.com/felixk
 
     For example for the single signals:
 
-        nnUNetv2_plan_and_preprocess -d 200 -c 2d --clean --verify_dataset_integrity
+        nnUNetv2_plan_and_preprocess -d 200 --clean -c 2d --verify_dataset_integrity
 
     Or for the full images:
 
-        nnUNetv2_plan_and_preprocess -d 500 -c 2d --clean --verify_dataset_integrity
+        nnUNetv2_plan_and_preprocess -d 500 --clean -c 2d --verify_dataset_integrity
 
 3. Model training
 
@@ -222,17 +222,13 @@ To then train the segmentation model, we use [nnU-Net](https://github.com/felixk
 
         nnUNetv2_train 200 2d 0 -device cuda --npz
 
-    Or for all folds:
-
-        nnUNetv2_train 200 2d 0 -device cuda --npz
-
     Or for the full images:
 
-        nnUNetv2_train 500 2d 0 -device cuda
+        nnUNetv2_train 500 2d 0 -device cuda --c
 
     Or select the device (one per fold):
 
-        CUDA_VISIBLE_DEVICES=0 nnUNetv2_train 500 2d 0
+        CUDA_VISIBLE_DEVICES=0 nnUNetv2_train 500 2d 0 --c
 
 4. Determine the best configuration
 
@@ -244,7 +240,7 @@ To then train the segmentation model, we use [nnU-Net](https://github.com/felixk
 
     Or for the full images:
 
-        nnUNetv2_find_best_configuration 500 -c 2d -f 0 --disable_ensembling
+        nnUNetv2_find_best_configuration 500 -c 2d --disable_ensembling
 
 5. Inference
     
@@ -252,11 +248,11 @@ To then train the segmentation model, we use [nnU-Net](https://github.com/felixk
 
     For example for the single signals:
 
-        nnUNetv2_predict -d Dataset200_SingleSignals -i /Users/Felix_Krones/code/data/ptb-xl/Dataset200_SingleSignals/imagesTv -o /data/wolf6245/src/phd/physionet2024/data/nnUNet_output -f  0 -tr nnUNetTrainer -c 2d -p nnUNetPlans
+        nnUNetv2_predict -d Dataset200_SingleSignals -i /data/wolf6245/data/ptb-xl/Dataset200_SingleSignals/imagesTv -o /data/wolf6245/src/phd/physionet24/data/nnUNet_output -f  0 -tr nnUNetTrainer -c 2d -p nnUNetPlans
 
     Or for the full images:
 
-        nnUNetv2_predict -d Dataset500_FullImages -i /Users/Felix_Krones/code/data/ptb-xl/Dataset500_FullImages/imagesTv -o /data/wolf6245/src/phd/physionet2024/data/nnUNet_output -f  0 -tr nnUNetTrainer -c 2d -p nnUNetPlans
+        nnUNetv2_predict -d Dataset500_FullImages -i /data/wolf6245/data/ptb-xl/Dataset500_FullImages/imagesTv -o /data/wolf6245/src/phd/physionet24/data/nnUNet_output -f  0 -tr nnUNetTrainer -c 2d -p nnUNetPlans
 
 6. Postprocessing
 
@@ -264,11 +260,11 @@ To then train the segmentation model, we use [nnU-Net](https://github.com/felixk
 
     For example for the single signals:
 
-        nnUNetv2_apply_postprocessing -i /data/wolf6245/src/phd/physionet2024/data/nnUNet_output -o /data/wolf6245/src/phd/physionet2024/data/nnUNet_output_pp -pp_pkl_file /data/wolf6245/src/phd/physionet2024/data/nnUNet_results/Dataset200_SingleSignals/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/postprocessing.pkl -np 8 -plans_json /data/wolf6245/src/phd/physionet2024/data/nnUNet_results/Dataset200_SingleSignals/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/plans.json
+        nnUNetv2_apply_postprocessing -i /data/wolf6245/src/phd/physionet24/data/nnUNet_output -o /data/wolf6245/src/phd/physionet24/data/nnUNet_output_pp -pp_pkl_file /data/wolf6245/src/phd/physionet24/model/nnUNet_results/Dataset200_SingleSignals/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/postprocessing.pkl -np 8 -plans_json /data/wolf6245/src/phd/physionet24/model/nnUNet_results/Dataset200_SingleSignals/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/plans.json
 
     Or for the full images:
 
-        nnUNetv2_apply_postprocessing -i /data/wolf6245/src/phd/physionet2024/data/nnUNet_output -o /data/wolf6245/src/phd/physionet2024/data/nnUNet_output_pp -pp_pkl_file /data/wolf6245/src/phd/physionet2024/data/nnUNet_results/Dataset500_FullImages/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/postprocessing.pkl -np 8 -plans_json /data/wolf6245/src/phd/physionet2024/data/nnUNet_results/Dataset500_FullImages/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/plans.json
+        nnUNetv2_apply_postprocessing -i /data/wolf6245/src/phd/physionet24/data/nnUNet_output -o /data/wolf6245/src/phd/physionet24/data/nnUNet_output_pp -pp_pkl_file /data/wolf6245/src/phd/physionet24/model/nnUNet_results/Dataset500_FullImages/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/postprocessing.pkl -np 8 -plans_json /data/wolf6245/src/phd/physionet24/model/nnUNet_results/Dataset500_FullImages/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/plans.json
 
 
 ### Challenge pipeline
@@ -279,7 +275,7 @@ You can train your model(s) by running
 
 For example:
 
-    python train_model.py -d /Users/Felix_Krones/code/data/ptb-xl/Dataset500_Signals/imagesTr -m model -v
+    python train_model.py -d /data/wolf6245/data/ptb-xl/Dataset500_Signals/imagesTr -m model -v
 
 where
 
@@ -294,7 +290,7 @@ You can run your trained model(s) by running
 
 e.g.
 
-    python run_model.py -d /Users/Felix_Krones/code/data/ptb-xl/Dataset500_Signals_hidden/imagesTs -m model -o data/test_outputs -v
+    python run_model.py -d /data/wolf6245/data/ptb-xl/Dataset500_Signals_hidden/imagesTs -m model -o data/test_outputs -v
 
 where
 
@@ -312,7 +308,7 @@ You can evaluate your model by running
 
 e.g.
 
-    python evaluate_model.py -d /Users/Felix_Krones/code/data/ptb-xl/Dataset500_Signals/imagesTs -o data/test_outputs -s data/evaluation/scores.csv
+    python evaluate_model.py -d /data/wolf6245/data/ptb-xl/Dataset500_Signals/imagesTs -o data/test_outputs -s data/evaluation/scores.csv
 
 where
 
@@ -381,7 +377,7 @@ If you have trouble running your code, then please try the follow steps to run t
 
         user@computer:~/example/python-example-2024$ docker run -it -v ~/example/model:/challenge/model -v ~/example/test_data:/challenge/test_data -v ~/example/test_outputs:/challenge/test_outputs -v ~/example/training_data:/challenge/training_data image bash
 
-        docker run -it -v /data/wolf6245/src/phd/physionet2024/model:/challenge/model -v /Users/Felix_Krones/code/data/ptb-xl/Dataset500_Signals/imagesTs:/challenge/test_data -v /data/wolf6245/src/phd/physionet2024/data/test_outputs:/challenge/test_outputs -v /Users/Felix_Krones/code/data/ptb-xl/Dataset500_Signals/imagesTr:/challenge/training_data image bash
+        docker run -it -v /data/wolf6245/src/phd/physionet24/model:/challenge/model -v /data/wolf6245/data/ptb-xl/Dataset500_Signals/imagesTs:/challenge/test_data -v /data/wolf6245/src/phd/physionet24/data/test_outputs:/challenge/test_outputs -v /data/wolf6245/data/ptb-xl/Dataset500_Signals/imagesTr:/challenge/training_data image bash
 
         root@[...]:/challenge# ls
             Dockerfile             README.md         test_outputs
