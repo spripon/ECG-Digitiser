@@ -106,7 +106,9 @@ Downloading the data will need 3-4 GB of space. Step 3 will increase the data fr
                 --lead_bbox \
                 --random_print_header 0.8 \
                 --calibration_pulse 0.8 \
+                --random_bw 0.1 \
                 --fully_random \
+                --add_qr_code \
                 -rot 10 \
                 --num_images_per_ecg 4 \
                 --run_in_parallel \
