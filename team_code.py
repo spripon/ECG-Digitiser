@@ -87,7 +87,7 @@ DEVICE = torch.device(
     if torch.backends.mps.is_available()
     else "cpu"
 )
-DEVICE = torch.device("cpu")
+#DEVICE = torch.device("cpu")
 NUM_WORKERS = 8
 if DEVICE.type == "cuda":
     WORLD_SIZE = torch.cuda.device_count()
