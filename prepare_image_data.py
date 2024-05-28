@@ -8,6 +8,7 @@ import os.path
 import shutil
 import sys
 from collections import defaultdict
+from tqdm import tqdm
 
 from helper_code import *
 
@@ -43,25 +44,29 @@ def run(args):
     # Find the header files.
     records = find_records(args.input_folder)
 
-    # Find the image and annotation files.
+    # Find the image files.
     image_files = find_files(args.input_folder, image_file_types)
     record_to_image_files = defaultdict(set)
-    for image_file in image_files:
+    print('1/3: Finding image files...')
+    for image_file in tqdm(image_files):
         root, ext = os.path.splitext(image_file)
-        record = '-'.join(root.split('-')[:-1])
+        record = '-'.join(root.split('-')[:1])
         basename = os.path.basename(image_file)
         record_to_image_files[record].add(basename)
-
+    
+    # Find the annotation files.
     annotation_files = find_files(args.input_folder, annotation_file_types)
     record_to_annotation_files = defaultdict(set)
-    for annotation_file in annotation_files:
+    print('2/3: Finding annotation files...')
+    for annotation_file in tqdm(annotation_files):
         root, ext = os.path.splitext(annotation_file)
-        record = '-'.join(root.split('-')[:-1])
+        record = '-'.join(root.split('-')[:1])
         basename = os.path.basename(annotation_file)
         record_to_annotation_files[record].add(basename)
 
     # Update the header files and copy signal files.
-    for record in records:
+    print('3/3: Updating header files and copying signal files...')
+    for record in tqdm(records):
         record_path, record_basename = os.path.split(record)
         record_image_files = record_to_image_files[record]
         record_annotation_files = record_to_annotation_files[record]

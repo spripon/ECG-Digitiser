@@ -89,7 +89,7 @@ def main_parallel(rank, args):
 
 if __name__ == "__main__":
     args_to_use = get_parser().parse_args(sys.argv[1:])
-    
+
     # Check
     if args_to_use.run_in_parallel:
         assert (
@@ -98,7 +98,7 @@ if __name__ == "__main__":
         assert (
             args_to_use.run_in_parallel and WORLD_SIZE > 1
         ), "Cannot run in parallel (RUN_IN_PARALLEL) without multiple GPUs (WORLD_SIZE)."
-    
+
     if args_to_use.run_in_parallel:
         print(f"Running in parallel on {WORLD_SIZE} processes.")
         mp.spawn(

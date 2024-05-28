@@ -21,14 +21,10 @@ export nnUNet_preprocessed="/data/inet-multimodal-ai/wolf6245/src/phd/physionet2
 export nnUNet_results="/data/inet-multimodal-ai/wolf6245/src/phd/physionet2024/data/nnUNet_results"
 
 # 2. Experiment planning and preprocessing
-nnUNetv2_plan_and_preprocess -d 300 --clean -c 2d --verify_dataset_integrity
+nnUNetv2_plan_and_preprocess -d 500 --clean -c 2d --verify_dataset_integrity
 
 # 3. Model training # 14 h
-# nnUNetv2_train 300 2d 0 -device cuda
-# nnUNetv2_train 300 2d 1 -device cuda
-# nnUNetv2_train 300 2d 2 -device cuda
-# nnUNetv2_train 300 2d 3 -device cuda
-# nnUNetv2_train 300 2d 4 -device cuda
+# nnUNetv2_train 500 2d 0 -device cuda --c
 
 # 4. Determine the best configuration
-# nnUNetv2_find_best_configuration 300 -c 2d -f 0 #--disable_ensembling
+# nnUNetv2_find_best_configuration 500 -c 2d -f 0 #--disable_ensembling

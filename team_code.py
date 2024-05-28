@@ -77,7 +77,7 @@ from helper_code import *
 #
 ################################################################################
 # Root folder
-ROOT = "/data/wolf6245"
+ROOT = "/Users/Felix_Krones/code"
 
 # Device settings
 DEVICE = torch.device(
@@ -87,6 +87,7 @@ DEVICE = torch.device(
     if torch.backends.mps.is_available()
     else "cpu"
 )
+DEVICE = torch.device("cpu")
 NUM_WORKERS = 8
 if DEVICE.type == "cuda":
     WORLD_SIZE = torch.cuda.device_count()
@@ -94,6 +95,7 @@ else:
     WORLD_SIZE = 1
 
 # General settings
+X_FREQUENCY = 500
 NC = 3
 BATCH_SIZE = 32
 SEED = 42
@@ -101,7 +103,7 @@ IMG_SIZE = (50, 500)
 IMAGES_PARTS_FOR_GRID_PREDICTION = (0.7, 0.05, 1.0, 0.25)  # relative: (x1,y1,x2,y2)
 
 # Get bbox settings
-PIXELS_TO_SHIFT = (0, -3)  # (x shift, y shift) # TODO: Check why this is necessary
+PIXELS_TO_SHIFT = (0, -4)  # (x shift, y shift) # TODO: Check why this is necessary
 NUM_EPOCHS_BBOX = 100
 LR_BBOX = 0.005
 MOMENTUM_BBOX = 0.9
@@ -577,7 +579,7 @@ def bbox_prediction_to_json(bbox_predicted):
 
 
 def filter_for_full_lead(
-    boxes_of_type, full_mode_lead, box_type=None, image_path=None, i=None
+    boxes_of_type, full_mode_lead, box_type=None, image_path=None, i=None, verbose=0
 ):
     # Prepare
     boxes_of_type_copy = boxes_of_type.copy()
@@ -601,9 +603,10 @@ def filter_for_full_lead(
 
     # Get the longest box
     if len(double_lead_names) < 2:
-        warnings.warn(
-            f"There are no two full_mode_leads in the dict {box_type}. Is it possible that it was already filtered? Image {image_path}: lead_names_in_dict: {lead_names_in_dict}, double_lead_names: {double_lead_names}"
-        )
+        if verbose > 0:
+            warnings.warn(
+                f"There are no two full_mode_leads in the dict {box_type}. Is it possible that it was already filtered? Image {image_path}: lead_names_in_dict: {lead_names_in_dict}, double_lead_names: {double_lead_names}"
+            )
     else:
         if i is not None:
             lead_boxes_x = [
@@ -760,6 +763,7 @@ def dataloader_wrapper(
             records=records,
             test=test_setting,
             transform=transform,
+            rotate_back=True,
             rotate=True,
             nc=NC,
             single_signals=single_signals,
@@ -809,6 +813,7 @@ class ECGSignalDataset(VisionDataset):
         records,
         test=False,
         transform=None,
+        rotate_back=False,
         rotate=False,
         rotation_model=None,
         nc=3,
@@ -825,6 +830,7 @@ class ECGSignalDataset(VisionDataset):
         self.test = test
         self.transform = transform
         self.rotate = rotate
+        self.rotate_back = rotate_back
         self.rotation_model = rotation_model
         self.nc = nc
         self.single_signals = single_signals
@@ -873,7 +879,7 @@ class ECGSignalDataset(VisionDataset):
                     except Exception as e:
                         print(f"Error in {json_path}")
                         raise e
-                for bbox in json_dict["lead_bounding_box"]:
+                for bbox in [{**lead["lead_bounding_box"], "lead_name": lead["lead_name"]} for lead in json_dict["leads"]]:
                     self.images_single.append(image_path)
                     self.signal_paths_single.append(signal_path)
                     self.json_files_single.append(json_file)
@@ -909,6 +915,9 @@ class ECGSignalDataset(VisionDataset):
                 raise ValueError(
                     f"For nc = {self.nc}, the number of channels {image.shape[0]} is not supported."
                 )
+                
+        if self.rotate_back:
+            image = rotate(image, -json_dict["rotate"])
 
         # Rotate image
         rot_angle = get_rotation_angle(image.permute(1, 2, 0).numpy().astype(np.uint8))
@@ -941,21 +950,30 @@ class ECGSignalDataset(VisionDataset):
 
         # Load all other information
         if not self.test:
+            # Only have full lead
+            full_lead_length = max(
+                [
+                    lead["end_sample"] - lead["start_sample"]
+                    for lead in json_dict["leads"]
+                    if lead["lead_name"] == json_dict["full_mode_lead"]
+                ]
+            )
+            json_dict["leads"] = [
+                lead
+                for lead in json_dict["leads"]
+                if lead["lead_name"] != json_dict["full_mode_lead"]
+                or lead["end_sample"] - lead["start_sample"] == full_lead_length
+            ]
+            
             # Prepare info dict
             info_dict["signal_path"] = self.signal_paths[idx]
             info_dict["full_mode_lead"] = json_dict["full_mode_lead"]
-            info_dict["text_bounding_box"] = json_dict["text_bounding_box"]
-            info_dict["lead_bounding_box"] = json_dict["lead_bounding_box"]
-            info_dict["grid_text_bounding_box_x"] = json_dict[
-                "grid_text_bounding_box_x"
-            ]
-            info_dict["grid_text_bounding_box_y"] = json_dict[
-                "grid_text_bounding_box_y"
-            ]
+            info_dict["text_bounding_box"] = [{**lead["text_bounding_box"], "lead_name": lead["lead_name"]} for lead in json_dict["leads"]]
+            info_dict["lead_bounding_box"] = [{**lead["lead_bounding_box"], "lead_name": lead["lead_name"]} for lead in json_dict["leads"]]
+            info_dict["lead_name"] = "all"
             info_dict["x_resolution"] = json_dict["x_resolution"]
             info_dict["y_resolution"] = json_dict["y_resolution"]
             info_dict["augment"] = json_dict["augment"]
-            info_dict["lead_name"] = "all"
             info_dict["x_grid"] = json_dict["x_grid"]
             info_dict["y_grid"] = json_dict["y_grid"]
             mm_per_pixel_x = get_mm_per_pixel(info_dict["x_grid"])
@@ -964,6 +982,7 @@ class ECGSignalDataset(VisionDataset):
             mV_per_pixel = get_mV_per_pixel(mm_per_pixel_y)
             info_dict["sec_per_pixel"] = sec_per_pixel
             info_dict["mV_per_pixel"] = mV_per_pixel
+            info_dict["rotation"] = json_dict["rotate"]
 
             # Load mask
             mask = read_image(self.masks[idx])
@@ -971,38 +990,22 @@ class ECGSignalDataset(VisionDataset):
 
             # Load augmented mask
             if json_dict["augment"] and self.load_argumented:
+                json_dict["leads_augmented"] = [
+                    lead
+                    for lead in json_dict["leads_augmented"]
+                    if lead["lead_name"] != json_dict["full_mode_lead"]
+                    or lead["end_sample"] - lead["start_sample"] == full_lead_length
+                ]
                 mask_augmented = read_image(
                     self.masks[idx].replace(".png", "_augmented.png")
                 )
-                info_dict["lead_bounding_box_augmented"] = json_dict[
-                    "lead_bounding_box_augmented"
-                ]
-                info_dict["text_bounding_box_augmented"] = json_dict[
-                    "text_bounding_box_augmented"
-                ]
-                info_dict["grid_text_bounding_box_x_augmented"] = json_dict[
-                    "grid_text_bounding_box_x_augmented"
-                ]
-                info_dict["grid_text_bounding_box_y_augmented"] = json_dict[
-                    "grid_text_bounding_box_y_augmented"
-                ]
-                info_dict["rotation"] = json_dict["rotate"]
+                info_dict["lead_bounding_box_augmented"] = [{**lead["lead_bounding_box"], "lead_name": lead["lead_name"]} for lead in json_dict["leads_augmented"]]
+                info_dict["text_bounding_box_augmented"] = [{**lead["text_bounding_box"], "lead_name": lead["lead_name"]} for lead in json_dict["leads_augmented"]]
             else:
                 mask_augmented = mask
-                info_dict["lead_bounding_box_augmented"] = info_dict[
-                    "lead_bounding_box"
-                ]
-                info_dict["text_bounding_box_augmented"] = info_dict[
-                    "text_bounding_box"
-                ]
-                info_dict["grid_text_bounding_box_x_augmented"] = info_dict[
-                    "grid_text_bounding_box_x"
-                ]
-                info_dict["grid_text_bounding_box_y_augmented"] = info_dict[
-                    "grid_text_bounding_box_y"
-                ]
-                info_dict["rotation"] = 0
-            signals, fields = load_signal(self.signal_paths[idx])
+                info_dict["lead_bounding_box_augmented"] = info_dict["lead_bounding_box"]
+                info_dict["text_bounding_box_augmented"] = info_dict["text_bounding_box"]
+            signals, fields = load_signals(self.signal_paths[idx])
 
         else:
             print(
@@ -1637,7 +1640,7 @@ def get_lines(np_image, threshold_HoughLines=1380, rho_resolution=1):
 
 
 def get_rotation_angle(np_image):
-    lines = get_lines(np_image, threshold_HoughLines=1320)
+    lines = get_lines(np_image, threshold_HoughLines=1280)
     filtered_lines = filter_lines(
         lines, degree_window=30, parallelism_count=5, parallelism_window=2
     )
@@ -1776,7 +1779,7 @@ def plot_bbox(ax, j, bboxes, c, img_height, img_width):
 
 def plot_signals(ax, record_path):
     # Load the signals
-    label_signal, label_fields = load_signal(
+    label_signal, label_fields = load_signals(
         record_path
     )  # Shape of label_signal is (1000,12) for 12 leads
     sig_names = label_fields["sig_name"]
@@ -1789,9 +1792,9 @@ def plot_signals(ax, record_path):
         sub_ax = plt.subplot(inner_grid[i])
         sub_ax.plot(label_signal[:, i], label=sig_names[i])
         sub_ax.set_title(sig_names[i])
-        sub_ax.set_xlim(0, 1000)  # Set x-axis limits
-        # sub_ax.set_ylim(-1, 1)    # Set y-axis limits
-        sub_ax.set_xticks([0, 500, 1000])  # Set specific x-axis ticks
+        sub_ax.set_xlim(0, X_FREQUENCY*10)  # Set x-axis limits
+        sub_ax.set_ylim(-1.5, 1.5)    # Set y-axis limits
+        sub_ax.set_xticks([0, X_FREQUENCY*5, X_FREQUENCY*10])  # Set specific x-axis ticks
         sub_ax.set_yticks([-1, 0, 1])  # Set specific y-axis ticks
         sub_ax.minorticks_off()
         sub_ax.label_outer()  # Clean up labels to only show on the outer edges
@@ -1799,7 +1802,7 @@ def plot_signals(ax, record_path):
     return ax
 
 
-def inspection_plots(loader_to_use, num_images_to_plot=1, plot_augmented=False):
+def inspection_plots(loader_to_use, num_images_to_plot=1, plot_augmented=True):
     i = 0
     num_cols = 4 if plot_augmented else 3
     fig, ax = plt.subplots(
@@ -1831,8 +1834,6 @@ def inspection_plots(loader_to_use, num_images_to_plot=1, plot_augmented=False):
                 [
                     "lead_bounding_box",
                     "text_bounding_box",
-                    "grid_text_bounding_box_x",
-                    "grid_text_bounding_box_y",
                 ],
                 ["r", "g", "b", "b"],
                 batch_dicts["image"][j].shape[1],
@@ -1853,8 +1854,6 @@ def inspection_plots(loader_to_use, num_images_to_plot=1, plot_augmented=False):
                     [
                         "lead_bounding_box_augmented",
                         "text_bounding_box_augmented",
-                        "grid_text_bounding_box_x_augmented",
-                        "grid_text_bounding_box_y_augmented",
                     ],
                     ["r", "g", "b", "b"],
                     batch_dicts["image"][j].shape[1],

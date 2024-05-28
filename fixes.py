@@ -1,6 +1,7 @@
 import os
 import json
 
+
 def find_empty_json_files(directory):
     empty_files = []
 
@@ -9,7 +10,7 @@ def find_empty_json_files(directory):
             if file.endswith(".json"):
                 file_path = os.path.join(root, file)
                 try:
-                    with open(file_path, 'r') as f:
+                    with open(file_path, "r") as f:
                         content = f.read().strip()
                         if not content or content == "{}" or content == "[]":
                             empty_files.append(file_path)
@@ -38,9 +39,7 @@ if __name__ == "__main__":
     # directory = '/data/inet-multimodal-ai/wolf6245/data/ptb-xl/Dataset100_Signals'
     # empty_json_files = find_empty_json_files(directory)
     # print("Empty JSON files:", empty_json_files)
-    
-    root_folder = '/data/inet-multimodal-ai/wolf6245/data/ptb-xl/Dataset300_FullImages'
-    prefix = '16'
+
+    root_folder = "/data/inet-multimodal-ai/wolf6245/data/ptb-xl/Dataset300_FullImages"
+    prefix = "16"
     delete_files_with_prefix(root_folder, prefix)
-    
-    
