@@ -68,6 +68,12 @@ def get_parser():
         default=False,
         help="Whether to rotate the images",
     )
+    parser.add_argument(
+        "--num_workers",
+        type=int,
+        default=-1,
+        help="Number of workers to use for parallel processing",
+    )
     return parser
 
 
@@ -274,7 +280,7 @@ def run(args):
     for group_name, file_paths in tqdm(data_groups.items()):
         target_dir = os.path.join(args.output_folder, group_name)
         os.makedirs(target_dir, exist_ok=True)
-        parallel_transfer_files(file_paths, target_dir, args.move)
+        parallel_transfer_files(file_paths, target_dir, args.move, args.num_workers)
 
     # Optional: Convert all rgba to rgb and/or rotate images
     if args.rgba_to_rgb or args.rotate_image:
@@ -307,6 +313,7 @@ def run(args):
                 args.rgba_to_rgb,
                 args.rotate_image,
                 original_file_paths,
+                args.num_workers
             )
 
     # Create masks
@@ -327,7 +334,7 @@ def run(args):
                 os.path.join(old_folder_path, file) for file in json_files
             ]
             create_mask_from_json_parallel(
-                json_file_paths, mask_file_names, args.gray_to_rgb, args.mask_multilabel
+                json_file_paths, mask_file_names, args.gray_to_rgb, args.mask_multilabel, args.num_workers
             )
 
     # Print number of files in each group
