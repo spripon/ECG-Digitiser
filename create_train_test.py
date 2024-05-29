@@ -301,6 +301,14 @@ def run(args):
                     for file in os.listdir(folder_path)
                     if file.endswith(".png")
                 ]
+                # Copy all json, hea and dat files to the original folder
+                print("Copying original json, hea and dat files...")
+                for file in tqdm(os.listdir(folder_path)):
+                    if file.endswith(".json") or file.endswith(".hea") or file.endswith(".dat"):
+                        shutil.copy(
+                            os.path.join(folder_path, file),
+                            os.path.join(original_folder_path, file),
+                        )
             else:
                 original_file_paths = None
             file_paths_to_convert = [
