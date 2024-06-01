@@ -27,4 +27,4 @@ nnUNetv2_plan_and_preprocess -d 500 --clean -c 2d --verify_dataset_integrity
 # nnUNetv2_train 500 2d 0 -device cuda --c
 
 # 4. Determine the best configuration
-# nnUNetv2_find_best_configuration 500 -c 2d -f 0 #--disable_ensembling
+# nnUNetv2_find_best_configuration 500 -c 2d --disable_ensembling
