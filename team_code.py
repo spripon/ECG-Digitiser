@@ -308,36 +308,67 @@ def load_models(model_folder, verbose):
 # Run your trained digitization model. This function is *required*. You should edit this function to add your code, but do *not*
 # change the arguments of this function. If you did not train one of the models, then you can return None for the model.
 def run_models(record, digitization_model, classification_model, verbose):
-    # Run the digitization model; if you did not train this model, then you can set signal = None.
-    model = digitization_model['model']
 
-    # Extract features.
-    features = extract_features(record)
-
-    # Load the dimensions of the signal.
+    # Load info and image
     header_file = get_header_file(record)
     header = load_text(header_file)
-
     num_samples = get_num_samples(header)
     num_signals = get_num_signals(header)
+    signal_names = get_signal_names(header)
+    path = os.path.split(record)[0]
+    image_file = get_image_files(record)[0]
+    image_file_path = os.path.join(path, image_file)
+    image = read_image(image_file_path)
+    image = image[:3]
+    
+    # Rotate
+    rot_angle = get_rotation_angle(image.permute(1, 2, 0).numpy().astype(np.uint8))
+    image_rotated = rotate(image, rot_angle)
+    
+    # Segment
+    mask_to_use = predict_mask_nnunet(image_rotated, f"Dataset{X_FREQUENCY}_Signals", signal_names)
+    
+    # Use mask to cut into single, binary masks
+    signal_masks_cropped, signal_positions_cropped, _ = cut_binary(mask_to_use, image_rotated, signal_names)
 
-    # Generate "random" waveforms using the a random seed from the feature.
-    seed = int(round(model + np.mean(features)))
-    signal = np.random.default_rng(seed=seed).uniform(low=-1, high=1, size=(num_samples, num_signals))
+    # Vecotrise
+    sec_per_pixel = get_sec_per_pixel(get_mm_per_pixel(39.37))
+    mV_per_pixel = get_mV_per_pixel(get_mm_per_pixel(39.37))
+    signals_predicted = {}
+    for lead, mask in signal_masks_cropped.items():
+        signals_predicted[lead] = vectorise(
+            image_rotated, 
+            mask, 
+            signal_positions_cropped[lead], 
+            sec_per_pixel, 
+            mV_per_pixel, 
+            Y_VALUES_PER_LEAD["full"], 
+            Y_VALUES_PER_LEAD[lead], 
+            num_samples,
+            interpolate_nans=False
+        )
+    
+    # Prep saving # TODO: Check if this is needed if we improve cut_binary
+    signal_list = []
+    for signal_name in signal_names:
+        signal = signals_predicted[signal_name].numpy()
+        if len(signal) < num_samples:
+            nan_signal = np.empty(num_samples)
+            nan_signal[:] = np.nan
+            signal_start = SIGNAL_START[signal_name] * num_samples/10
+            nan_signal[int(signal_start):int(signal_start + len(signal))] = signal
+            signal_list.append(nan_signal)
+        else:
+            signal_list.append(signal)
+    signal = np.array(signal_list).T
     
     # Run the classification model.
     model = classification_model['model']
     classes = classification_model['classes']
-
-    # Extract features.
     features = extract_features(record)
     features = features.reshape(1, -1)
-
-    # Get model probabilities.
     probabilities = model.predict_proba(features)
     probabilities = np.asarray(probabilities, dtype=np.float32)[:, 0, 1]
-
-    # Choose the class or classes with the highest probability as the label or labels.
     max_probability = np.nanmax(probabilities)
     labels = [classes[i] for i, probability in enumerate(probabilities) if probability == max_probability]
 
@@ -1068,6 +1099,69 @@ class ECGSignalDataset(VisionDataset):
 # Models and training
 ################################################################################
 
+def cut_binary(mask_to_use, image_rotated, signal_names): # TODO: Make sure we have enough signals
+    signal_masks = {}
+    signal_images = {}
+    signal_positions = {}
+    mask_values = list(pd.Series(mask_to_use.numpy().flatten()).value_counts().index)
+    possible_lead_names = BOX_TYPE_LABEL_MAPPING["lead_bounding_box"]
+    lead_names_in_mask = {
+        k: v for k, v in possible_lead_names.items() if v in mask_values
+    }
+    for lead_name, lead_value in lead_names_in_mask.items():
+        binary_mask = torch.where(mask_to_use == lead_value, 1, 0)
+        signal_img, y1 = cut_to_mask(image_rotated, binary_mask, True)
+        signal_mask = cut_to_mask(binary_mask, binary_mask)
+        signal_images[lead_name] = signal_img
+        signal_masks[lead_name] = signal_mask
+        signal_positions[lead_name] = y1
+
+    return signal_masks, signal_positions, signal_images
+        
+
+# TODO: How can peaks better be handled?
+def vectorise(image_rotated, mask, signal_cropped, sec_per_pixel, mV_per_pixel, y_values_per_lead_full, y_values_per_lead_lead, num_samples, interpolate_nans=False):
+    
+    # Get scaling info
+    total_seconds_from_mask = round(
+        torch.tensor(sec_per_pixel).item() * mask.shape[2], 1
+    )
+    if total_seconds_from_mask > 5: # TODO: Check if this is a valid assumption to make
+        total_seconds = 10
+    else:
+        total_seconds = 2.5
+    values_needed = num_samples/(10/total_seconds)
+
+    # Get mask values
+    non_zero_mean = torch.tensor(
+        [
+            torch.mean(torch.nonzero(mask[0, :, i]).type(torch.float32))
+            for i in range(mask.shape[2])
+        ]
+    )
+
+    # y-scale by shifting
+    if total_seconds == 10:
+        zero_pixel_total_image = (1 - y_values_per_lead_full) * image_rotated.shape[1]
+    else:
+        zero_pixel_total_image = (1 - y_values_per_lead_lead) * image_rotated.shape[1]
+    zero_pixel = zero_pixel_total_image - signal_cropped
+    predicted_signal = (zero_pixel - non_zero_mean) * mV_per_pixel
+
+    # x-Scale by interpolation
+    n = predicted_signal.shape[0]
+    data_reshaped = predicted_signal.view(1, 1, n)
+    resampled_data = F.interpolate(
+        data_reshaped, size=values_needed, mode="linear", align_corners=False
+    )
+    predicted_signal_sampled = resampled_data.view(-1)
+    if interpolate_nans:  # TODO: Should this be done or should nans be kept?
+        predicted_signal_filled = interpolate_with_pandas(predicted_signal_sampled)
+    else:
+        predicted_signal_filled = predicted_signal_sampled
+
+    return predicted_signal_filled
+
 
 def predict_mask_nnunet(image, dataset_name):
     # Define paths
@@ -1079,7 +1173,7 @@ def predict_mask_nnunet(image, dataset_name):
 
     # Define run commands
     command_run = f"nnUNetv2_predict -d {dataset_name} -i {temp_folder_input} -o {temp_folder_output} -f  0 -tr nnUNetTrainer -c 2d -p nnUNetPlans"
-    command_post_process = f"nnUNetv2_apply_postprocessing -i {temp_folder_output} -o {temp_folder_output_pp} -pp_pkl_file data/nnUNet_results/{dataset_name}/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/postprocessing.pkl -np 8 -plans_json data/nnUNet_results/{dataset_name}/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/plans.json"
+    command_post_process = f"nnUNetv2_apply_postprocessing -i {temp_folder_output} -o {temp_folder_output_pp} -pp_pkl_file model/nnUNet_results/{dataset_name}/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/postprocessing.pkl -np 8 -plans_json model/nnUNet_results/{dataset_name}/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/plans.json"
 
     # Create temp folders:
     os.makedirs(temp_folder_input, exist_ok=True)
