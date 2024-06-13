@@ -293,7 +293,7 @@ You can run your trained model(s) by running
 
 e.g.
 
-    python run_model.py -d /data/wolf6245/data/ptb-xl/Dataset500_Signals_hidden/imagesTs -m model -o data/test_outputs -v
+    python run_model.py -d /Users/Felix_Krones/code/data/ptb-xl/test_images -m model -o data/test_outputs -v
 
 where
 

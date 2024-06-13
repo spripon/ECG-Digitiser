@@ -87,7 +87,7 @@ DEVICE = torch.device(
     if torch.backends.mps.is_available()
     else "cpu"
 )
-#DEVICE = torch.device("cpu")
+DEVICE = torch.device("cpu")
 NUM_WORKERS = 8
 if DEVICE.type == "cuda":
     WORLD_SIZE = torch.cuda.device_count()
@@ -194,8 +194,8 @@ SIGNAL_START = {
 
 # nnUNet settings
 NNUNET_RAW = f"{ROOT}/data/ptb-xl"
-NNUNET_PREPROCESSED = f"{ROOT}/src/phd/physionet24/model/nnUNet_preprocessed"
-NNUNET_RESULTS = f"{ROOT}/src/phd/physionet24/model/nnUNet_results"
+NNUNET_PREPROCESSED = f"{os.getcwd()}/model/nnUNet_preprocessed"
+NNUNET_RESULTS = f"{os.getcwd()}/model/nnUNet_results"
 
 # TODO: Train on float rotated images
 # TODO: Lead boxes: Do we need separate models for lead and lead name? Should we use one box per line?
