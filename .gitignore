@@ -1,7 +1,10 @@
 ##########################
 # Common files
 data/**
-**/model/**
+**/model/**/*.png
+**/model/**/*.png
+**/model/**/nnUNet_preprocessed/**
+!**/model/**/progress.png
 **/temp_models/**
 **/test_outputs/**
 **/evaluation/**
