@@ -1,0 +1,7 @@
+***Run inference like this:***
+
+nnUNetv2_predict -d Dataset500_Signals -i INPUT_FOLDER -o OUTPUT_FOLDER -f  0 -tr nnUNetTrainer -c 2d -p nnUNetPlans
+
+***Once inference is completed, run postprocessing like this:***
+
+nnUNetv2_apply_postprocessing -i OUTPUT_FOLDER -o OUTPUT_FOLDER_PP -pp_pkl_file /data/wolf6245/src/phd/physionet24/model/nnUNet_results/Dataset500_Signals/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/postprocessing.pkl -np 8 -plans_json /data/wolf6245/src/phd/physionet24/model/nnUNet_results/Dataset500_Signals/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/plans.json
