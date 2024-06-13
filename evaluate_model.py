@@ -209,6 +209,7 @@ def run(args):
 
     # Output the scores to screen and/or a file.
     if args.score_file:
+        os.makedirs(os.path.split(args.score_file)[0], exist_ok=True)
         save_text(args.score_file, output_string)
     else:
         print(output_string)

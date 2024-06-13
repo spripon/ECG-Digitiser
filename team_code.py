@@ -77,7 +77,7 @@ from helper_code import *
 #
 ################################################################################
 # Root folder
-ROOT = "/Users/Felix_Krones/code"
+ROOT = "/data/wolf6245"
 
 # Device settings
 DEVICE = torch.device(
@@ -194,9 +194,10 @@ SIGNAL_START = {
 
 # nnUNet settings
 NNUNET_RAW = f"{ROOT}/data/ptb-xl"
-NNUNET_PREPROCESSED = f"{ROOT}/src/phd/physionet2024/data/nnUNet_preprocessed"
-NNUNET_RESULTS = f"{ROOT}/src/phd/physionet2024/data/nnUNet_results"
+NNUNET_PREPROCESSED = f"{ROOT}/src/phd/physionet24/model/nnUNet_preprocessed"
+NNUNET_RESULTS = f"{ROOT}/src/phd/physionet24/model/nnUNet_results"
 
+# TODO: Train on float rotated images
 # TODO: Lead boxes: Do we need separate models for lead and lead name? Should we use one box per line?
 # TODO: Grid info: Do we need a model for grid information or do we assume them to be constant? Do we need a model for pixels per grid cell ("scale info")?
 # Questions:
@@ -326,7 +327,7 @@ def run_models(record, digitization_model, classification_model, verbose):
     image_rotated = rotate(image, rot_angle)
     
     # Segment
-    mask_to_use = predict_mask_nnunet(image_rotated, f"Dataset{X_FREQUENCY}_Signals", signal_names)
+    mask_to_use = predict_mask_nnunet(image_rotated, f"Dataset{X_FREQUENCY}_Signals")
     
     # Use mask to cut into single, binary masks
     signal_masks_cropped, signal_positions_cropped, _ = cut_binary(mask_to_use, image_rotated, signal_names)
@@ -803,13 +804,14 @@ def dataloader_wrapper(
     for path, test_setting, shuffle_setting in zip(
         list_of_paths, test_settings, shuffle_settings
     ):
+        print(f"Loading data from {path}")
         records = find_records(path)
         data = ECGSignalDataset(
             data_folder=path,
             records=records,
             test=test_setting,
             transform=transform,
-            rotate_back=True,
+            rotate_back=False,
             rotate=True,
             nc=NC,
             single_signals=single_signals,
@@ -903,7 +905,7 @@ class ECGSignalDataset(VisionDataset):
         self.masks = [
             os.path.join(
                 os.path.split(f)[0].replace("/imagesT", "/labelsT"), os.path.split(f)[1]
-            ).replace("_0000.png", ".png")
+            ).replace("_0000.png", ".png").replace('_original', '')
             for f in self.images
         ]
 
@@ -1130,7 +1132,7 @@ def vectorise(image_rotated, mask, signal_cropped, sec_per_pixel, mV_per_pixel, 
         total_seconds = 10
     else:
         total_seconds = 2.5
-    values_needed = num_samples/(10/total_seconds)
+    values_needed = int(num_samples/(10/total_seconds))
 
     # Get mask values
     non_zero_mean = torch.tensor(
@@ -1749,9 +1751,9 @@ def get_lines(np_image, threshold_HoughLines=1380, rho_resolution=1):
 
 
 def get_rotation_angle(np_image):
-    lines = get_lines(np_image, threshold_HoughLines=1280)
+    lines = get_lines(np_image, threshold_HoughLines=1200)
     filtered_lines = filter_lines(
-        lines, degree_window=30, parallelism_count=5, parallelism_window=2
+        lines, degree_window=30, parallelism_count=3, parallelism_window=2
     )
     if filtered_lines is None:
         rot_angle = np.nan
