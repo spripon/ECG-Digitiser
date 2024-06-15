@@ -255,7 +255,7 @@ To then train the segmentation model, we use [nnU-Net](https://github.com/felixk
 
     Or for the full images:
 
-        nnUNetv2_predict -d Dataset500_Signals -i /data/wolf6245/data/ptb-xl/Dataset500_Signals/imagesTv -o /data/wolf6245/src/phd/physionet24/data/nnUNet_output -f  0 -tr nnUNetTrainer -c 2d -p nnUNetPlans
+        nnUNetv2_predict -d Dataset500_Signals -i /Users/felixkrones/python_projects/data/ptb-xl/test_images -o /Users/felixkrones/python_projects/src/phd/physionet24/data/nnUNet_output -f  0 -tr nnUNetTrainer -c 2d -p nnUNetPlans
 
 6. Postprocessing
 

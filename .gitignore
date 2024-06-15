@@ -180,3 +180,8 @@ src/packages/**/build
 
 # alloy system files
 .alloy/
+
+# Ignore everythin in nnUNet
+!nnUNet/
+!nnUNet/**
+!nnUNet/**/*
