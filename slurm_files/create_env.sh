@@ -19,8 +19,11 @@ source activate $CONPREFIX
 # Install packages...
 pip install -r requirements.txt
 
-cd /data/inet-multimodal-ai/wolf6245/src/phd/nnUNet
+# Install nnunet
+cd nnUNet
 pip install -e .
-pip install git+https://github.com/ChaoningZhang/MobileSAM.git
-pip install timm
-pip install git+https://github.com/Kent0n-Li/nnSAM.git
+
+# Install nnsam
+# pip install git+https://github.com/ChaoningZhang/MobileSAM.git
+# pip install timm
+# pip install git+https://github.com/Kent0n-Li/nnSAM.git
