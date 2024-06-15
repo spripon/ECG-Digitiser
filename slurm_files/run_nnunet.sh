@@ -20,6 +20,9 @@ export nnUNet_raw="/data/inet-multimodal-ai/wolf6245/data/ptb-xl"
 export nnUNet_preprocessed="/data/inet-multimodal-ai/wolf6245/src/phd/physionet24/model/nnUNet_preprocessed"
 export nnUNet_results="/data/inet-multimodal-ai/wolf6245/src/phd/physionet24/model/nnUNet_results"
 
+# Optional: Use nnsam
+#set MODEL_NAME=nnsam
+
 # 2. Experiment planning and preprocessing
 nnUNetv2_plan_and_preprocess -d 500 --clean -c 2d --verify_dataset_integrity
 
@@ -27,4 +30,4 @@ nnUNetv2_plan_and_preprocess -d 500 --clean -c 2d --verify_dataset_integrity
 # nnUNetv2_train 500 2d 0 -device cuda --c
 
 # 4. Determine the best configuration
-# nnUNetv2_find_best_configuration 500 -c 2d --disable_ensembling
+# nnUNetv2_find_best_configuration 500 -c 2d -f 0 --disable_ensembling
