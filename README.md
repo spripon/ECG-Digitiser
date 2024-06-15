@@ -12,8 +12,14 @@ At the moment, it does the following:
 ## How do I get started?
 
 1. Clone this repository `git clone https://github.com/felixkrones/physionet24.git`
-2. Move into repo `cd physionet24`
-3. Create a new environment:
+   
+   If you want to get the pre-trained weights, before you clone it, you need to activate `lfs`:
+   ```git lfs install```
+
+    If it does not download the weights automatically, you can then use ```git lfs pull```
+   
+3. Move into repo `cd physionet24`
+4. Create a new environment:
 
     Using pip:
 
@@ -42,11 +48,11 @@ At the moment, it does the following:
         pip install timm
         pip install git+https://github.com/Kent0n-Li/nnSAM.git
 
-4. Create the data. So far, only the waveforms are provided with all the metadata in separate files. We a) need to combine the metadata with the header files and b) generate the images from the signals. See the description below on `How do I create data for these scripts?`. This is using the 500Hz images at the moment.
-5. Create your train and test data. We use the splits suggested in `ptbxl_database.csv`. See below under `How do I create train and test data?`.
-6. Prepare the images and masks for the segmentation model. See below under `How do I prepare the images for the segmentation`.
-7. Make changes: Before you change anything, create a new branch: `git checkout -b your_branch`. You should only make changes on `team_code.py`. If you want to make changes on the data split, you can change `create_train_test.py`. If you need new packages, add them to `requirements.txt`. You can use `analysis.ipynb` or create your own notebook for some data analysis and experiments.
-8. Run the code as decribed below under `## How do I run these scripts?`.
+5. Create the data. So far, only the waveforms are provided with all the metadata in separate files. We a) need to combine the metadata with the header files and b) generate the images from the signals. See the description below on `How do I create data for these scripts?`. This is using the 500Hz images at the moment.
+6. Create your train and test data. We use the splits suggested in `ptbxl_database.csv`. See below under `How do I create train and test data?`.
+7. Prepare the images and masks for the segmentation model. See below under `How do I prepare the images for the segmentation`.
+8. Make changes: Before you change anything, create a new branch: `git checkout -b your_branch`. You should only make changes on `team_code.py`. If you want to make changes on the data split, you can change `create_train_test.py`. If you need new packages, add them to `requirements.txt`. You can use `analysis.ipynb` or create your own notebook for some data analysis and experiments.
+9. Run the code as decribed below under `## How do I run these scripts?`.
 
 
 ## How do I create the data for these scripts?
