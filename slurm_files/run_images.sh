@@ -2,8 +2,8 @@
 #SBATCH --nodes=1
 #SBATCH --mem=250G
 #SBATCH --ntasks-per-node=20
-#SBATCH --time=11:10:00
-#SBATCH --partition=short
+#SBATCH --time=21:10:00
+#SBATCH --partition=long
 #SBATCH --job-name=prep
 
 #SBATCH --mail-type=BEGIN,END
@@ -29,12 +29,13 @@ python prepare_image_data.py \
         -i /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images \
         -o /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images
 
-# python create_train_test.py \
-#         -i /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images \
-#         -d /data/inet-multimodal-ai/wolf6245/data/ptb-xl/ptbxl_database.csv \
-#         -o /data/inet-multimodal-ai/wolf6245/data/ptb-xl/Dataset500_Signals \
-#         --rgba_to_rgb \
-#         --gray_to_rgb \
-#         --mask \
-#         --mask_multilabel \
-#         --rotate_image
+python create_train_test.py \
+        -i /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images \
+        -d /data/inet-multimodal-ai/wolf6245/data/ptb-xl/ptbxl_database.csv \
+        -o /data/inet-multimodal-ai/wolf6245/data/ptb-xl/Dataset500_Signals \
+        --rgba_to_rgb \
+        --gray_to_rgb \
+        --mask \
+        --mask_multilabel \
+        --rotate_image \
+        --num_workers 10
