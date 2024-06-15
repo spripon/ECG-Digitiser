@@ -33,7 +33,6 @@ At the moment, it does the following:
 
     At the moment, the official nnU-Net repository contains a bug and is not working with RGB png images. Please use the following installation instructions for now:
 
-        git clone https://github.com/felixkrones/nnUNet.git
         cd nnUNet
         pip install -e .
 
