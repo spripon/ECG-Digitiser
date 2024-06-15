@@ -194,9 +194,9 @@ To then train the segmentation model, we use [nnU-Net](https://github.com/felixk
 1. Set the environment variables for nnU-Net.
 
         # Set environment variables
-        export nnUNet_raw="/data/wolf6245/data/ptb-xl"
-        export nnUNet_preprocessed="/data/wolf6245/src/phd/physionet24/model/nnUNet_preprocessed"
-        export nnUNet_results="/data/wolf6245/src/phd/physionet24/model/nnUNet_results"
+        export nnUNet_raw="/Users/felixkrones/python_projects/data/ptb-xl"
+        export nnUNet_preprocessed='/Users/felixkrones/python_projects/src/phd/physionet24/model/nnUNet_preprocessed'
+        export nnUNet_results='/Users/felixkrones/python_projects/src/phd/physionet24/model/nnUNet_results'
 
         # Check
         echo ${nnUNet_raw}
@@ -293,7 +293,7 @@ You can run your trained model(s) by running
 
 e.g.
 
-    python run_model.py -d /Users/Felix_Krones/code/data/ptb-xl/test_images -m model -o data/test_outputs -v
+    python run_model.py -d /Users/felixkrones/python_projects/data/ptb-xl/test_images -m model -o data/test_outputs -v
 
 where
 
@@ -380,7 +380,7 @@ If you have trouble running your code, then please try the follow steps to run t
 
         user@computer:~/example/python-example-2024$ docker run -it -v ~/example/model:/challenge/model -v ~/example/test_data:/challenge/test_data -v ~/example/test_outputs:/challenge/test_outputs -v ~/example/training_data:/challenge/training_data image bash
 
-        docker run -it -v /data/wolf6245/src/phd/physionet24/model:/challenge/model -v /data/wolf6245/data/ptb-xl/Dataset500_Signals/imagesTs:/challenge/test_data -v /data/wolf6245/src/phd/physionet24/data/test_outputs:/challenge/test_outputs -v /data/wolf6245/data/ptb-xl/Dataset500_Signals/imagesTr:/challenge/training_data image bash
+        docker run -it -v /Users/felixkrones/python_projects/src/phd/physionet24/model:/challenge/model -v /Users/felixkrones/python_projects/data/ptb-xl/test_images:/challenge/test_data -v /Users/felixkrones/python_projects/src/phd/physionet24/data/test_outputs:/challenge/test_outputs -v /Users/felixkrones/python_projects/data/ptb-xl/test_images:/challenge/training_data image bash
 
         root@[...]:/challenge# ls
             Dockerfile             README.md         test_outputs
