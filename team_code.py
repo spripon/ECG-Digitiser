@@ -227,6 +227,8 @@ def train_models(data_folder, model_folder, verbose):
 
     if num_records == 0:
         raise FileNotFoundError('No data were provided.')
+    
+    # Train the digitization model. If you are not training a digitization model, then you can remove this part of the code.
 
     if verbose:
         print('Training the digitization model...')
@@ -271,8 +273,9 @@ def train_models(data_folder, model_folder, verbose):
     # generator.
     digitization_model = np.mean(features)
 
-    # Train the classification model. This very simple model trains a random forest model with these very simple features.
+    # Train the classification model. If you are not training a classification model, then you can remove this part of the code.
 
+    # This very simple model trains a random forest model with these very simple features.
     classification_features = np.vstack(classification_features)
     classes = sorted(set.union(*map(set, classification_labels)))
     classification_labels = compute_one_hot_encoding(classification_labels, classes)
@@ -363,15 +366,18 @@ def run_models(record, digitization_model, classification_model, verbose):
             signal_list.append(signal)
     signal = np.array(signal_list).T
     
-    # Run the classification model.
-    model = classification_model['model']
-    classes = classification_model['classes']
-    features = extract_features(record)
-    features = features.reshape(1, -1)
-    probabilities = model.predict_proba(features)
-    probabilities = np.asarray(probabilities, dtype=np.float32)[:, 0, 1]
-    max_probability = np.nanmax(probabilities)
-    labels = [classes[i] for i, probability in enumerate(probabilities) if probability == max_probability]
+    # Run the classification model; if you did not train this model, then you can set labels = None.
+
+    # Load the classification model and classes.
+    # model = classification_model['model']
+    # classes = classification_model['classes']
+    # features = extract_features(record)
+    # features = features.reshape(1, -1)
+    # probabilities = model.predict_proba(features)
+    # probabilities = np.asarray(probabilities, dtype=np.float32)[:, 0, 1]
+    # max_probability = np.nanmax(probabilities)
+    # labels = [classes[i] for i, probability in enumerate(probabilities) if probability == max_probability]
+    labels = None
 
     return signal, labels
 

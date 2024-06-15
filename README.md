@@ -277,7 +277,7 @@ You can train your model(s) by running
 
 For example:
 
-    python train_model.py -d /data/wolf6245/data/ptb-xl/Dataset500_Signals/imagesTr -m model -v
+    python train_model.py -d /data/wolf6245/data/ptb-xl/test -m model -v
 
 where
 
@@ -292,7 +292,7 @@ You can run your trained model(s) by running
 
 e.g.
 
-    python run_model.py -d /Users/felixkrones/python_projects/data/ptb-xl/test_images -m model -o data/test_outputs -v
+    python run_model.py -d /data/wolf6245/data/ptb-xl/test -m model -o data/test_outputs -v
 
 where
 

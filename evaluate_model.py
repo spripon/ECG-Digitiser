@@ -215,6 +215,9 @@ def run(args):
 
     # Output the scores to screen and/or a file.
     if args.score_file:
+        folder_path = os.path.dirname(args.score_file)
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
         save_text(args.score_file, output_string)
     else:
         print(output_string)
