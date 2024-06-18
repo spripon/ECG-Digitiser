@@ -4,8 +4,8 @@
 #SBATCH --nodes=1
 #SBATCH --mem=250G
 #SBATCH --ntasks-per-node=28
-#SBATCH --time=10:10:00
-#SBATCH --partition=short
+#SBATCH --time=00:10:00
+#SBATCH --partition=devel
 #SBATCH --job-name=nn_pre
 
 #SBATCH --mail-type=BEGIN,END
@@ -21,7 +21,7 @@ export nnUNet_preprocessed="/data/inet-multimodal-ai/wolf6245/src/phd/physionet2
 export nnUNet_results="/data/inet-multimodal-ai/wolf6245/src/phd/physionet24/model/nnUNet_results"
 
 # Optional: Use nnsam
-#set MODEL_NAME=nnsam
+export MODEL_NAME="nnsam"
 
 # 2. Experiment planning and preprocessing
 nnUNetv2_plan_and_preprocess -d 500 --clean -c 2d --verify_dataset_integrity

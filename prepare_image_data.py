@@ -105,6 +105,7 @@ def run(args):
                 output_image_file = os.path.join(args.output_folder, relative_path, image_file)
                 if os.path.isfile(input_image_file):
                     shutil.copy2(input_image_file, output_image_file)
-
+    
 if __name__=='__main__':
     run(get_parser().parse_args(sys.argv[1:]))
+    print("Done with prepare_image_data.py")

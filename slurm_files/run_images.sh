@@ -2,8 +2,8 @@
 #SBATCH --nodes=1
 #SBATCH --mem=250G
 #SBATCH --ntasks-per-node=20
-#SBATCH --time=21:10:00
-#SBATCH --partition=long
+#SBATCH --time=36:10:00
+#SBATCH --partition=medium
 #SBATCH --job-name=prep
 
 #SBATCH --mail-type=BEGIN,END
@@ -25,9 +25,9 @@ conda info --env
 # RUN: gen_ecg_images_from_data_batch
 ##################################################################################
 
-python prepare_image_data.py \
-        -i /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images \
-        -o /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images
+# python prepare_image_data.py \
+#         -i /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images \
+#         -o /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images
 
 python create_train_test.py \
         -i /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images \
@@ -38,4 +38,4 @@ python create_train_test.py \
         --mask \
         --mask_multilabel \
         --rotate_image \
-        --num_workers 10
+        --num_workers 12

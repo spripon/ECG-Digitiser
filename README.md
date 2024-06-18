@@ -208,7 +208,7 @@ To then train the segmentation model, we use [nnU-Net](https://github.com/felixk
 
     If you are planning to use nnSAM, define the model:
 
-        set MODEL_NAME=nnsam
+        export MODEL_NAME="nnsam"
 
 2. Experiment planning and preprocessing
 
