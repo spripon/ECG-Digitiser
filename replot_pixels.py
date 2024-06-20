@@ -45,13 +45,38 @@ if __name__ == "__main__":
         default="ptb-xl/records500_prepared_w_images",
         help='Directory containing plotted pixels to be resampled.'
     )
+    parser.add_argument(
+        '--plot',
+        action='store_true',
+        help='Whether to plot the resampled pixels.'
+    )
 
     args = parser.parse_args()
 
     resample_factor = args.resample_factor
     dir = args.dir
+    plot = args.plot
 
     args = argparse.ArgumentParser()
 
     resample_pixels_in_dir(dir, resample_factor)
     print("All files saved.")
+
+    if plot:
+        for file in os.listdir(dir):
+            if file.endswith(".json"):
+                file_path = os.path.join(dir, file)
+
+                with open(file_path, "r") as file:
+                    data = json.load(file)
+
+                leads = data["leads"]
+                for i in range(len(leads)):
+                    pixels = np.array(leads[i]["plotted_pixels"])
+                    plt.scatter(pixels[:, 1], -pixels[:, 0], s=1)
+                plt.figure()
+                for i in range(len(leads)):
+                    dense_pixels = np.array(leads[i]["dense_plotted_pixels"])
+                    plt.scatter(dense_pixels[:, 1], -dense_pixels[:, 0], s=1)
+                plt.show()
+                break
