@@ -193,7 +193,7 @@ SIGNAL_START = {
 }
 
 # nnUNet settings
-NNUNET_RAW = f"{ROOT}/data/ptb-xl"
+NNUNET_RAW = f"{os.getcwd()}/data/ptb-xl"
 NNUNET_PREPROCESSED = f"{os.getcwd()}/model/nnUNet_preprocessed"
 NNUNET_RESULTS = f"{os.getcwd()}/model/nnUNet_results"
 
@@ -324,7 +324,7 @@ def run_models(record, digitization_model, classification_model, verbose):
     image_file_path = os.path.join(path, image_file)
     image = read_image(image_file_path)
     image = image[:3]
-    
+
     # Rotate
     rot_angle = get_rotation_angle(image.permute(1, 2, 0).numpy().astype(np.uint8))
     image_rotated = rotate(image, rot_angle)
