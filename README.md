@@ -138,7 +138,15 @@ Downloading the data will need 3-4 GB of space. Step 3 will increase the data fr
             -i /data/wolf6245/data/ptb-xl/records500_prepared_w_images \
             -o /data/wolf6245/data/ptb-xl/records500_prepared_w_images
 
-5. Remove the waveforms, certain information about the waveforms, and the demographics and classes to create a version of the data for inference. You can use the `ptb-xl/records500_hidden/00000` folder for the `run_model` step, but it would be better to repeat the above steps on a new subset of the data that you will not use to train your model:
+
+5. Create more dense pixels for the masks:
+
+        python replot_pixels.py \
+            --resample_factor 20 \
+            --dir /data/wolf6245/data/ptb-xl/records500_prepared_w_images
+
+
+6. Remove the waveforms, certain information about the waveforms, and the demographics and classes to create a version of the data for inference. You can use the `ptb-xl/records500_hidden/00000` folder for the `run_model` step, but it would be better to repeat the above steps on a new subset of the data that you will not use to train your model:
 
         python remove_hidden_data.py \
             -i ptb-xl/records500_prepared_w_images \
@@ -151,6 +159,7 @@ Downloading the data will need 3-4 GB of space. Step 3 will increase the data fr
             -i /data/wolf6245/data/ptb-xl/records500_prepared_w_images \
             -o /data/wolf6245/data/ptb-xl/records500_prepared_w_images_hidden \
             --include_images
+
 
 ## How do I create train and test data?
 
@@ -173,6 +182,7 @@ For example:
         --mask \
         --mask_multilabel \
         --rotate_image \
+        --plotted_pixels_key dense_plotted_pixels \
         --num_workers 8
 
 

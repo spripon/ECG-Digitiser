@@ -3,10 +3,11 @@ import json
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+from tqdm import tqdm
 
 
 def resample_pixels_in_dir(dir, resample_factor):
-    for file in os.listdir(dir):
+    for file in tqdm(os.listdir(dir)):
         if file.endswith(".json"):
             file_path = os.path.join(dir, file)
 
@@ -24,6 +25,19 @@ def resample_pixels_in_dir(dir, resample_factor):
                     new_pixels[j * resample_factor : (j + 1) * resample_factor, 1] = \
                         np.linspace(pixels[j, 1], pixels[j + 1, 1], resample_factor)
                 data["leads"][i]["dense_plotted_pixels"] = new_pixels.tolist()
+                
+            if "leads_augmented" in data.keys():
+                leads = data["leads_augmented"]
+                for i in range(len(leads)):
+                    pixels = np.array(leads[i]["plotted_pixels"])
+                    # Use linear interpolation to add more pixels to the plot
+                    new_pixels = np.zeros(((len(pixels) - 1) * resample_factor, 2))
+                    for j in range(len(pixels) - 1):
+                        new_pixels[j * resample_factor : (j + 1) * resample_factor, 0] = \
+                            np.linspace(pixels[j, 0], pixels[j + 1, 0], resample_factor)
+                        new_pixels[j * resample_factor : (j + 1) * resample_factor, 1] = \
+                            np.linspace(pixels[j, 1], pixels[j + 1, 1], resample_factor)
+                    data["leads_augmented"][i]["dense_plotted_pixels"] = new_pixels.tolist()
 
             with open(file_path, "w") as file:
                 json.dump(data, file, indent=4)

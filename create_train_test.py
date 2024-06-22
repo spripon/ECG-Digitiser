@@ -74,6 +74,12 @@ def get_parser():
         default=-1,
         help="Number of workers to use for parallel processing",
     )
+    parser.add_argument(
+        "--plotted_pixels_key",
+        type=str,
+        default="plotted_pixels",
+        help="Key for plotted pixels in json file",
+    )
     return parser
 
 
@@ -152,7 +158,7 @@ def convert_images_parallel(
 
 
 # Function to create mask from json
-def create_mask_from_json(json_path, mask_path, rgb=False, multilabel=False):
+def create_mask_from_json(json_path, mask_path, rgb=False, multilabel=False, plotted_pixels_key="plotted_pixels"):
     # Get json info
     with open(json_path) as f:
         data_dict = json.load(f)
@@ -187,7 +193,7 @@ def create_mask_from_json(json_path, mask_path, rgb=False, multilabel=False):
 
         # Get labels
         plotted_pixels = [
-            (lead["plotted_pixels"], lead["lead_name"]) for lead in data_dict[key]
+            (lead[plotted_pixels_key], lead["lead_name"]) for lead in data_dict[key]
         ]
         plotted_pixels = {
             tuple(np.array(item).astype("int")): subtuple[1]
@@ -220,7 +226,7 @@ def create_mask_from_json(json_path, mask_path, rgb=False, multilabel=False):
 
 # Create masks in parallel
 def create_mask_from_json_parallel(
-    json_paths, mask_paths, rgb=False, multilabel=False, num_workers=-1
+    json_paths, mask_paths, rgb=False, multilabel=False, plotted_pixels_key="plotted_pixels", num_workers=-1
 ):
     if num_workers == -1:
         workers = os.cpu_count() - 2
@@ -237,6 +243,7 @@ def create_mask_from_json_parallel(
                     mask_paths,
                     [rgb] * len(json_paths),
                     [multilabel] * len(json_paths),
+                    [plotted_pixels_key] * len(json_paths),
                 ),
                 total=len(json_paths),
             )
@@ -342,7 +349,7 @@ def run(args):
                 os.path.join(old_folder_path, file) for file in json_files
             ]
             create_mask_from_json_parallel(
-                json_file_paths, mask_file_names, args.gray_to_rgb, args.mask_multilabel, args.num_workers
+                json_file_paths, mask_file_names, args.gray_to_rgb, args.mask_multilabel, args.plotted_pixels_key, args.num_workers
             )
 
     # Print number of files in each group
