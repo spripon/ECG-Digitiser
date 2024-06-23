@@ -1,9 +1,9 @@
 #! /bin/bash 
 #SBATCH --nodes=1
 #SBATCH --mem=250G
-#SBATCH --ntasks-per-node=20
-#SBATCH --time=47:10:00
-#SBATCH --partition=long
+#SBATCH --ntasks-per-node=28
+#SBATCH --time=11:10:00
+#SBATCH --partition=short
 #SBATCH --job-name=prep
 
 #SBATCH --mail-type=BEGIN,END
@@ -31,16 +31,18 @@ conda info --env
 
 python replot_pixels.py \
         --resample_factor 20 \
-        --dir /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images 
+        --dir /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images \
+        --run_on_subdirs \
+        --num_workers 22
 
-python create_train_test.py \
-        -i /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images \
-        -d /data/inet-multimodal-ai/wolf6245/data/ptb-xl/ptbxl_database.csv \
-        -o /data/inet-multimodal-ai/wolf6245/data/ptb-xl/Dataset500_Signals \
-        --rgba_to_rgb \
-        --gray_to_rgb \
-        --mask \
-        --mask_multilabel \
-        --rotate_image \
-        --plotted_pixels_key dense_plotted_pixels \
-        --num_workers 12
+# python create_train_test.py \
+#         -i /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images \
+#         -d /data/inet-multimodal-ai/wolf6245/data/ptb-xl/ptbxl_database.csv \
+#         -o /data/inet-multimodal-ai/wolf6245/data/ptb-xl/Dataset500_Signals \
+#         --rgba_to_rgb \
+#         --gray_to_rgb \
+#         --mask \
+#         --mask_multilabel \
+#         --rotate_image \
+#         --plotted_pixels_key dense_plotted_pixels \
+#         --num_workers 12

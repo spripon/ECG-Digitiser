@@ -143,7 +143,9 @@ Downloading the data will need 3-4 GB of space. Step 3 will increase the data fr
 
         python replot_pixels.py \
             --resample_factor 20 \
-            --dir /data/wolf6245/data/ptb-xl/records500_prepared_w_images
+            --dir /data/wolf6245/data/ptb-xl/records500_prepared_w_images \
+            --run_on_subdirs \
+            --num_workers 12
 
 
 6. Remove the waveforms, certain information about the waveforms, and the demographics and classes to create a version of the data for inference. You can use the `ptb-xl/records500_hidden/00000` folder for the `run_model` step, but it would be better to repeat the above steps on a new subset of the data that you will not use to train your model:

@@ -4,30 +4,21 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 
 
 def resample_pixels_in_dir(dir, resample_factor):
-    for file in tqdm(os.listdir(dir)):
-        if file.endswith(".json"):
-            file_path = os.path.join(dir, file)
+    for root, _, files in os.walk(dir):
+        print(f"Running increased pixel density on {root}...")
+        for file in files:
+            if file.endswith(".json"):
+                file_path = os.path.join(root, file)
 
-            with open(file_path, "r") as file:
-                data = json.load(file)
+                with open(file_path, "r") as file:
+                    data = json.load(file)
 
-            leads = data["leads"]
-            for i in range(len(leads)):
-                pixels = np.array(leads[i]["plotted_pixels"])
-                # Use linear interpolation to add more pixels to the plot
-                new_pixels = np.zeros(((len(pixels) - 1) * resample_factor, 2))
-                for j in range(len(pixels) - 1):
-                    new_pixels[j * resample_factor : (j + 1) * resample_factor, 0] = \
-                        np.linspace(pixels[j, 0], pixels[j + 1, 0], resample_factor)
-                    new_pixels[j * resample_factor : (j + 1) * resample_factor, 1] = \
-                        np.linspace(pixels[j, 1], pixels[j + 1, 1], resample_factor)
-                data["leads"][i]["dense_plotted_pixels"] = new_pixels.tolist()
-                
-            if "leads_augmented" in data.keys():
-                leads = data["leads_augmented"]
+                leads = data["leads"]
                 for i in range(len(leads)):
                     pixels = np.array(leads[i]["plotted_pixels"])
                     # Use linear interpolation to add more pixels to the plot
@@ -37,10 +28,23 @@ def resample_pixels_in_dir(dir, resample_factor):
                             np.linspace(pixels[j, 0], pixels[j + 1, 0], resample_factor)
                         new_pixels[j * resample_factor : (j + 1) * resample_factor, 1] = \
                             np.linspace(pixels[j, 1], pixels[j + 1, 1], resample_factor)
-                    data["leads_augmented"][i]["dense_plotted_pixels"] = new_pixels.tolist()
+                    data["leads"][i]["dense_plotted_pixels"] = new_pixels.tolist()
+                    
+                if "leads_augmented" in data.keys():
+                    leads = data["leads_augmented"]
+                    for i in range(len(leads)):
+                        pixels = np.array(leads[i]["plotted_pixels"])
+                        # Use linear interpolation to add more pixels to the plot
+                        new_pixels = np.zeros(((len(pixels) - 1) * resample_factor, 2))
+                        for j in range(len(pixels) - 1):
+                            new_pixels[j * resample_factor : (j + 1) * resample_factor, 0] = \
+                                np.linspace(pixels[j, 0], pixels[j + 1, 0], resample_factor)
+                            new_pixels[j * resample_factor : (j + 1) * resample_factor, 1] = \
+                                np.linspace(pixels[j, 1], pixels[j + 1, 1], resample_factor)
+                        data["leads_augmented"][i]["dense_plotted_pixels"] = new_pixels.tolist()
 
-            with open(file_path, "w") as file:
-                json.dump(data, file, indent=4)
+                with open(file_path, "w") as file:
+                    json.dump(data, file, indent=4)
 
 
 if __name__ == "__main__":
@@ -60,23 +64,39 @@ if __name__ == "__main__":
         help='Directory containing plotted pixels to be resampled.'
     )
     parser.add_argument(
+        '--run_on_subdirs',
+        action='store_true',
+        help='Whether to run on folder itself or in parallel on subdirs?.'
+    )
+    parser.add_argument(
         '--plot',
         action='store_true',
         help='Whether to plot the resampled pixels.'
     )
+    parser.add_argument(
+        '--num_workers',
+        type=int,
+        default=1,
+        help='Number of workers.'
+    )
 
     args = parser.parse_args()
 
-    resample_factor = args.resample_factor
+    # Increase pixel density
     dir = args.dir
-    plot = args.plot
-
-    args = argparse.ArgumentParser()
-
-    resample_pixels_in_dir(dir, resample_factor)
+    if args.run_on_subdirs:
+        dirs = [os.path.join(dir, d) for d in os.listdir(dir) if os.path.isdir(os.path.join(dir, d))]
+        print(f"Running in parallel using {args.num_workers}/{os.cpu_count()} workers for {len(dirs)} dirs: {dirs}")
+        resample_pixels_in_dir_partial = partial(resample_pixels_in_dir, resample_factor=args.resample_factor)
+        with ThreadPoolExecutor(max_workers=args.num_workers) as executor:
+            list(tqdm(executor.map(resample_pixels_in_dir_partial, dirs), total=len(dirs)))
+    else:
+        print("Running on all files in dir and subdirs...")
+        resample_pixels_in_dir(dir, args.resample_factor)
     print("All files saved.")
 
-    if plot:
+    # Plot
+    if args.plot:
         for file in os.listdir(dir):
             if file.endswith(".json"):
                 file_path = os.path.join(dir, file)
@@ -94,3 +114,5 @@ if __name__ == "__main__":
                     plt.scatter(dense_pixels[:, 1], -dense_pixels[:, 0], s=1)
                 plt.show()
                 break
+
+    print("Done with replot_pixels.py")
