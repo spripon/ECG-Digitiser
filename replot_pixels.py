@@ -9,29 +9,18 @@ from functools import partial
 
 
 def resample_pixels_in_dir(dir, resample_factor):
+    error_list = []
     for root, _, files in os.walk(dir):
         print(f"Running increased pixel density on {root}...")
-        for file in files:
+        for file in tqdm(files):
             if file.endswith(".json"):
                 file_path = os.path.join(root, file)
 
-                with open(file_path, "r") as file:
-                    data = json.load(file)
+                try:
+                    with open(file_path, "r") as file:
+                        data = json.load(file)
 
-                leads = data["leads"]
-                for i in range(len(leads)):
-                    pixels = np.array(leads[i]["plotted_pixels"])
-                    # Use linear interpolation to add more pixels to the plot
-                    new_pixels = np.zeros(((len(pixels) - 1) * resample_factor, 2))
-                    for j in range(len(pixels) - 1):
-                        new_pixels[j * resample_factor : (j + 1) * resample_factor, 0] = \
-                            np.linspace(pixels[j, 0], pixels[j + 1, 0], resample_factor)
-                        new_pixels[j * resample_factor : (j + 1) * resample_factor, 1] = \
-                            np.linspace(pixels[j, 1], pixels[j + 1, 1], resample_factor)
-                    data["leads"][i]["dense_plotted_pixels"] = new_pixels.tolist()
-                    
-                if "leads_augmented" in data.keys():
-                    leads = data["leads_augmented"]
+                    leads = data["leads"]
                     for i in range(len(leads)):
                         pixels = np.array(leads[i]["plotted_pixels"])
                         # Use linear interpolation to add more pixels to the plot
@@ -41,11 +30,27 @@ def resample_pixels_in_dir(dir, resample_factor):
                                 np.linspace(pixels[j, 0], pixels[j + 1, 0], resample_factor)
                             new_pixels[j * resample_factor : (j + 1) * resample_factor, 1] = \
                                 np.linspace(pixels[j, 1], pixels[j + 1, 1], resample_factor)
-                        data["leads_augmented"][i]["dense_plotted_pixels"] = new_pixels.tolist()
+                        data["leads"][i]["dense_plotted_pixels"] = new_pixels.tolist()
+                        
+                    if "leads_augmented" in data.keys():
+                        leads = data["leads_augmented"]
+                        for i in range(len(leads)):
+                            pixels = np.array(leads[i]["plotted_pixels"])
+                            # Use linear interpolation to add more pixels to the plot
+                            new_pixels = np.zeros(((len(pixels) - 1) * resample_factor, 2))
+                            for j in range(len(pixels) - 1):
+                                new_pixels[j * resample_factor : (j + 1) * resample_factor, 0] = \
+                                    np.linspace(pixels[j, 0], pixels[j + 1, 0], resample_factor)
+                                new_pixels[j * resample_factor : (j + 1) * resample_factor, 1] = \
+                                    np.linspace(pixels[j, 1], pixels[j + 1, 1], resample_factor)
+                            data["leads_augmented"][i]["dense_plotted_pixels"] = new_pixels.tolist()
 
-                with open(file_path, "w") as file:
-                    json.dump(data, file, indent=4)
-
+                    with open(file_path, "w") as file:
+                        json.dump(data, file, indent=4)
+                except Exception as e:
+                    error_list.append((e, file_path))
+    print("Errors:")
+    print(error_list)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Resample plotted pixels in a "

@@ -1,10 +1,10 @@
 #! /bin/bash 
 #SBATCH --nodes=1
-#SBATCH --mem=250G
-#SBATCH --ntasks-per-node=28
+#SBATCH --mem=120G
+#SBATCH --ntasks-per-node=20
 #SBATCH --time=11:10:00
 #SBATCH --partition=short
-#SBATCH --job-name=prep
+#SBATCH --job-name=13-14
 
 #SBATCH --mail-type=BEGIN,END
 #SBATCH --mail-user=wolf6245@ox.ac.uk
@@ -28,12 +28,14 @@ conda info --env
 # python prepare_image_data.py \
 #         -i /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images \
 #         -o /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images
-
+        
 python replot_pixels.py \
         --resample_factor 20 \
-        --dir /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images \
-        --run_on_subdirs \
-        --num_workers 22
+        --dir /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/13000
+        
+python replot_pixels.py \
+        --resample_factor 20 \
+        --dir /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/14000
 
 # python create_train_test.py \
 #         -i /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images \
