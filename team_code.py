@@ -389,7 +389,11 @@ def run_models(record, digitization_model, classification_model, verbose):
     # Prep saving # TODO: Check if this is needed if we improve cut_binary
     signal_list = []
     for signal_name in signal_names:
-        signal = signals_predicted[signal_name].numpy()
+        if signal_name not in signals_predicted:
+            signal = np.empty(num_samples)
+            signal[:] = np.nan
+        else:
+            signal = signals_predicted[signal_name].numpy()
         if len(signal) < num_samples:
             nan_signal = np.empty(num_samples)
             nan_signal[:] = np.nan
