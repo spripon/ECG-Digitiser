@@ -255,7 +255,7 @@ def create_mask_from_json_parallel(
 # Run the code.
 def run(args):
     # Get file paths
-    print("Starting to determine data groups...")
+    print(f"Starting to determine data groups for {args.input_data}...")
     strat_fold_train = [1, 2, 3, 4, 5, 6, 7, 8]
     strat_fold_vali = [9]
     strat_fold_test = [10]
@@ -276,7 +276,7 @@ def run(args):
         if strat_fold in strat_fold_test:
             data_groups["imagesTs"].extend(matching_paths)
     print(
-        f"In total splitted {len(data_groups['imagesTr']) + len(data_groups['imagesTv']) + len(data_groups['imagesTs'])} files, compared to {count_files} files in the input folder."
+        f"In total splitted {len(data_groups['imagesTr']) + len(data_groups['imagesTv']) + len(data_groups['imagesTs'])} files, compared to {count_files} files in the input folder {args.input_data}."
     )
 
     # Create target directories and transfer images

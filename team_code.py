@@ -215,64 +215,98 @@ NNUNET_RESULTS = f"{os.getcwd()}/model/nnUNet_results"
 
 # Train your models. This function is *required*. You should edit this function to add your code, but do *not* change the arguments
 # of this function. If you do not train one of the models, then you can return None for the model.
-
-# Train your digitization model.
 def train_models(data_folder, model_folder, verbose):
+    
+    #############################################################################################################################
     # Find the data files.
     if verbose:
         print('Finding the Challenge data...')
-
     records = find_records(data_folder)
     num_records = len(records)
-
     if num_records == 0:
         raise FileNotFoundError('No data were provided.')
     
-    # Train the digitization model. If you are not training a digitization model, then you can remove this part of the code.
-
-    if verbose:
-        print('Training the digitization model...')
-
-    # Extract the features and labels from the data.
     if verbose:
         print('Extracting features and labels from the data...')
-
     digitization_features = list()
     classification_features = list()
     classification_labels = list()
-
-    # Iterate over the records.
     for i in range(num_records):
         if verbose:
             width = len(str(num_records))
             print(f'- {i+1:>{width}}/{num_records}: {records[i]}...')
-
         record = os.path.join(data_folder, records[i])
-
-        # Extract the features from the image; this simple example uses the same features for the digitization and classification
-        # tasks.
         features = extract_features(record)
-        
         digitization_features.append(features)
-
-        # Some images may not be labeled...
         labels = load_labels(record)
         if any(label for label in labels):
             classification_features.append(features)
             classification_labels.append(labels)
-
-    # ... but we expect some images to be labeled for classification.
     if not classification_labels:
         raise Exception('There are no labels for the data.')
 
-    # Train the models.
+
+    #############################################################################################################################
+    # Train the digitization model.
     if verbose:
-        print('Training the models on the data...')
-
-    # Train the digitization model. This very simple model uses the mean of these very simple features as a seed for a random number
-    # generator.
+        print('Training the digitization model...')
     digitization_model = np.mean(features)
+    
+    # Generate images and json files
+    # from ecg-image-kit.codes.ecg-image-generator.gen_ecg_images_from_data_batch import get_parser as get_parser_gen, run as gen_ecg_images_from_data_batch
+    # args = get_parser_gen()
+    # args.input_directory = data_folder
+    # args.output_directory = data_folder
+    # args.seed = 10
+    # args.mask_unplotted_samples = True
+    # args.print_header = True
+    # args.store_config = 2
+    # args.lead_name_bbox = True
+    # args.lead_bbox = True
+    # args.random_print_header = 0.7
+    # args.calibration_pulse = 0.8
+    # args.wrinkles = True
+    # args.augment = True
+    # args.rotate = 5
+    # args.num_images_per_ecg = 1
+    # gen_ecg_images_from_data_batch(args)
+    
+    # Prepare images
+    # from prepare_image_data import get_parser as get_parser_prep, run as prepare_image_data
+    # args = get_parser_prep()
+    # args.input_folder = data_folder
+    # args.output_folder = data_folder
+    # prepare_image_data(args)
+    
+    # Replot pixels
+    # from replot_pixels import resample_pixels_in_dir
+    # resample_pixels_in_dir(data_folder, 7)
+    
+    # Create train test split
+    # from create_train_test import get_parser as get_parser_create, run as create_train_test
+    # args = get_parser_create()
+    # args.input_data = data_folder
+    # args.output_folder = os.path.join(data_folder, 'Dataset500_Signals')
+    # args.database_file = 'ptbxl_database.csv'
+    # args.rgba_to_rgb = True
+    # args.gray_to_rgb = True
+    # args.mask = True
+    # args.mask_multilabel = True
+    # args.rotate_image = True
+    # args.plotted_pixels_key = "dense_plotted_pixels"
+    # create_train_test(args)
+    
+    # Train model
+    # os.environ["nnUNet_raw"] = NNUNET_RAW
+    # os.environ["nnUNet_preprocessed"] = NNUNET_PREPROCESSED
+    # os.environ["nnUNet_results"] = NNUNET_RESULTS
+    # command_run_preprocess = "nnUNetv2_plan_and_preprocess -d 500 --clean -c 2d --verify_dataset_integrity"
+    # command_run_train = "nnUNetv2_train 500 2d 0 -device cuda --c"
+    # subprocess.run(command_run_preprocess, shell=True)
+    # subprocess.run(command_run_train, shell=True)
+    
 
+    #############################################################################################################################
     # Train the classification model. If you are not training a classification model, then you can remove this part of the code.
 
     # This very simple model trains a random forest model with these very simple features.
@@ -288,16 +322,16 @@ def train_models(data_folder, model_folder, verbose):
     # Fit the model.
     classification_model = RandomForestClassifier(
         n_estimators=n_estimators, max_leaf_nodes=max_leaf_nodes, random_state=random_state).fit(classification_features, classification_labels)
-
-    # Create a folder for the models if it does not already exist.
-    os.makedirs(model_folder, exist_ok=True)
-
+    
+    
+    #############################################################################################################################
     # Save the models.
+    os.makedirs(model_folder, exist_ok=True)
     save_models(model_folder, digitization_model, classification_model, classes)
-
     if verbose:
         print('Done.')
         print()
+
 
 # Load your trained models. This function is *required*. You should edit this function to add your code, but do *not* change the
 # arguments of this function. If you do not train one of the models, then you can return None for the model.
