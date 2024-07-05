@@ -117,17 +117,20 @@ def parallel_transfer_files(source_paths, target_dir, move=False, num_workers=-1
 
 # Function to convert rgba to rgb
 def convert_images(file_path, rgba_to_rgb, rotate_image, original_folder_path):
-    img = Image.open(file_path)
-    if rgba_to_rgb and img.mode == "RGBA":
-        img = img.convert("RGB")
-    if rotate_image:
-        img.save(original_folder_path)
-        json_file = file_path.replace(".png", ".json")
-        with open(json_file) as f:
-            data_dict = json.load(f)
-        rotation = data_dict["rotate"]
-        img = img.rotate(rotation)
-    img.save(file_path)
+    try:
+        img = Image.open(file_path)
+        if rgba_to_rgb and img.mode == "RGBA":
+            img = img.convert("RGB")
+        if rotate_image:
+            img.save(original_folder_path)
+            json_file = file_path.replace(".png", ".json")
+            with open(json_file) as f:
+                data_dict = json.load(f)
+            rotation = data_dict["rotate"]
+            img = img.rotate(rotation)
+        img.save(file_path)
+    except Exception as e:
+        print(f"--------- ERROR IN {file_path} --------- {e} ---------")
 
 
 # Run conversion in parallel
@@ -300,17 +303,20 @@ def run(args):
         for folder in ["imagesTr", "imagesTv", "imagesTs"]:
             print(f"{str_aux} for {folder}...")
             folder_path = os.path.join(args.output_folder, folder)
+            possible_files = os.listdir(folder_path)
+            file_options = [f"{f.split('/')[-1].split('_hr')[0]}_hr" for f in data_groups[folder]]
+            files_to_consider = [f for f in possible_files if any([f.startswith(fo) for fo in file_options])]
             if args.rotate_image:
                 original_folder_path = folder_path + "_original"
                 os.makedirs(original_folder_path, exist_ok=True)
                 original_file_paths = [
                     os.path.join(original_folder_path, file)
-                    for file in os.listdir(folder_path)
+                    for file in files_to_consider
                     if file.endswith(".png")
                 ]
                 # Copy all json, hea and dat files to the original folder
                 print("Copying original json, hea and dat files...")
-                for file in tqdm(os.listdir(folder_path)):
+                for file in tqdm(files_to_consider):
                     if file.endswith(".json") or file.endswith(".hea") or file.endswith(".dat"):
                         shutil.copy(
                             os.path.join(folder_path, file),
@@ -320,7 +326,7 @@ def run(args):
                 original_file_paths = None
             file_paths_to_convert = [
                 os.path.join(folder_path, file)
-                for file in os.listdir(folder_path)
+                for file in files_to_consider
                 if file.endswith(".png")
             ]
             convert_images_parallel(
@@ -335,11 +341,12 @@ def run(args):
     if args.mask:
         for folder in ["imagesTr", "imagesTv", "imagesTs"]:
             print(f"Creating masks for {folder}...")
+            file_options = [f"{f.split('/')[-1].split('_hr')[0]}_hr" for f in data_groups[folder]]
             old_folder_path = os.path.join(args.output_folder, folder)
             new_folder_path = old_folder_path.replace("imagesT", "labelsT")
             os.makedirs(new_folder_path, exist_ok=True)
             json_files = [
-                file for file in os.listdir(old_folder_path) if file.endswith(".json")
+                file for file in os.listdir(old_folder_path) if file.endswith(".json") and any([file.startswith(fo) for fo in file_options])
             ]
             mask_file_names = [
                 os.path.join(new_folder_path, file.replace("_0000.json", ".png"))
