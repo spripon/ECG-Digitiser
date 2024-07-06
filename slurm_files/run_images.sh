@@ -2,9 +2,9 @@
 #SBATCH --nodes=1
 #SBATCH --mem=120G
 #SBATCH --ntasks-per-node=20
-#SBATCH --time=31:10:00
+#SBATCH --time=11:10:00
 #SBATCH --partition=medium
-#SBATCH --job-name=spl101112
+#SBATCH --job-name=spl3
 
 #SBATCH --mail-type=BEGIN,END
 #SBATCH --mail-user=wolf6245@ox.ac.uk
@@ -26,61 +26,17 @@ conda info --env
 ##################################################################################
 
 # python prepare_image_data.py \
-#         -i /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/03000 \
-#         -o /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/03000
+#         -i /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/00000 \
+#         -o /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/00000
 
-# python prepare_image_data.py \
-#         -i /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/04000 \
-#         -o /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/04000
-
-# python prepare_image_data.py \
-#         -i /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/13000 \
-#         -o /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/13000
-
-# python prepare_image_data.py \
-#         -i /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/14000 \
-#         -o /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/14000
-
-# python prepare_image_data.py \
-#         -i /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/19000 \
-#         -o /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/19000
-
-# python prepare_image_data.py \
-#         -i /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/20000 \
-#         -o /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/20000
-
-
-
-        
-# python replot_pixels.py \
-#         --resample_factor 7 \
-#         --dir /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/03000
-        
 # python replot_pixels.py \
 #         --resample_factor 7 \
 #         --dir /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/04000
 
-# python replot_pixels.py \
-#         --resample_factor 7 \
-#         --dir /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/13000
-
-# python replot_pixels.py \
-#         --resample_factor 7 \
-#         --dir /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/14000
-
-# python replot_pixels.py \
-#         --resample_factor 10 \
-#         --dir /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/19000
-        
-# python replot_pixels.py \
-#         --resample_factor 10 \
-#         --dir /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/20000
-
-
 
 
 python create_train_test.py \
-        -i /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/10000 \
+        -i /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/03000 \
         -d /data/inet-multimodal-ai/wolf6245/data/ptb-xl/ptbxl_database.csv \
         -o /data/inet-multimodal-ai/wolf6245/data/ptb-xl/Dataset500_Signals \
         --rgba_to_rgb \
@@ -89,30 +45,4 @@ python create_train_test.py \
         --mask_multilabel \
         --rotate_image \
         --plotted_pixels_key dense_plotted_pixels \
-        --num_workers 20
-
-
-python create_train_test.py \
-        -i /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/11000 \
-        -d /data/inet-multimodal-ai/wolf6245/data/ptb-xl/ptbxl_database.csv \
-        -o /data/inet-multimodal-ai/wolf6245/data/ptb-xl/Dataset500_Signals \
-        --rgba_to_rgb \
-        --gray_to_rgb \
-        --mask \
-        --mask_multilabel \
-        --rotate_image \
-        --plotted_pixels_key dense_plotted_pixels \
-        --num_workers 20
-
-
-python create_train_test.py \
-        -i /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/12000 \
-        -d /data/inet-multimodal-ai/wolf6245/data/ptb-xl/ptbxl_database.csv \
-        -o /data/inet-multimodal-ai/wolf6245/data/ptb-xl/Dataset500_Signals \
-        --rgba_to_rgb \
-        --gray_to_rgb \
-        --mask \
-        --mask_multilabel \
-        --rotate_image \
-        --plotted_pixels_key dense_plotted_pixels \
-        --num_workers 20
+        --num_workers 10
