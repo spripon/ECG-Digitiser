@@ -9,6 +9,7 @@ import os.path
 import pandas as pd
 import shutil
 import sys
+from tqdm import tqdm
 
 from helper_code import *
 
@@ -66,7 +67,7 @@ def run(args):
     records = find_records(args.input_folder)
 
     # Update the header files to include demographics data and labels and copy the signal files unchanged.
-    for record in records:
+    for record in tqdm(records):
 
         # Extract the demographics data.
         record_path, record_basename = os.path.split(record)
@@ -170,3 +171,4 @@ def run(args):
 
 if __name__=='__main__':
     run(get_parser().parse_args(sys.argv[1:]))
+    print("Done.")
