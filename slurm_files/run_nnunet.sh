@@ -21,7 +21,7 @@ export nnUNet_preprocessed="/data/inet-multimodal-ai/wolf6245/src/phd/physionet2
 export nnUNet_results="/data/inet-multimodal-ai/wolf6245/src/phd/physionet24/model/nnUNet_results"
 
 # Optional: Use nnsam
-export MODEL_NAME="nnsam"
+# export MODEL_NAME="nnsam"
 
 # 2. Experiment planning and preprocessing
 nnUNetv2_plan_and_preprocess -d 500 --clean -c 2d --verify_dataset_integrity

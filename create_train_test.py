@@ -162,69 +162,73 @@ def convert_images_parallel(
 
 # Function to create mask from json
 def create_mask_from_json(json_path, mask_path, rgb=False, multilabel=False, plotted_pixels_key="plotted_pixels"):
-    # Get json info
-    with open(json_path) as f:
-        data_dict = json.load(f)
+    try:
+        # Get json info
+        with open(json_path) as f:
+            data_dict = json.load(f)
 
-    # Check if augmented
-    if "leads_augmented" in data_dict:
-        mask_path_augmented = mask_path.replace(".png", "_augmented.png")
-        keys_to_use = ["leads", "leads_augmented"]
-        mask_paths_to_use = [mask_path, mask_path_augmented]
-    else:
-        keys_to_use = ["leads"]
-        mask_paths_to_use = [mask_path]
-
-    # Create mask
-    mask_values = BOX_TYPE_LABEL_MAPPING["lead_bounding_box"]
-    full_mode_lead = data_dict["full_mode_lead"]
-    for key, path_to_use in zip(keys_to_use, mask_paths_to_use):
-        # Filter for full lead
-        full_lead_length = max(
-            [
-                lead["end_sample"] - lead["start_sample"]
-                for lead in data_dict[key]
-                if lead["lead_name"] == full_mode_lead
-            ]
-        )
-        data_dict[key] = [
-            lead
-            for lead in data_dict[key]
-            if lead["lead_name"] != full_mode_lead
-            or lead["end_sample"] - lead["start_sample"] == full_lead_length
-        ]
-
-        # Get labels
-        plotted_pixels = [
-            (lead[plotted_pixels_key], lead["lead_name"]) for lead in data_dict[key]
-        ]
-        plotted_pixels = {
-            tuple(np.array(item).astype("int")): subtuple[1]
-            for subtuple in plotted_pixels
-            for item in subtuple[0]
-        }
-        plotted_pixels = {
-            k: v
-            for k, v in plotted_pixels.items()
-            if k[0] < data_dict["height"] and k[1] < data_dict["width"]
-        }
-        if multilabel:
-            plotted_pixels = {k: mask_values[v] for k, v in plotted_pixels.items()}
+        # Check if augmented
+        if "leads_augmented" in data_dict:
+            mask_path_augmented = mask_path.replace(".png", "_augmented.png")
+            keys_to_use = ["leads", "leads_augmented"]
+            mask_paths_to_use = [mask_path, mask_path_augmented]
         else:
-            plotted_pixels = {k: 1 for k, v in plotted_pixels.items()}
+            keys_to_use = ["leads"]
+            mask_paths_to_use = [mask_path]
 
-        # Replace mask values with correct labels
-        coords, values = zip(*plotted_pixels.items())
-        coords = np.array(coords)
-        values = np.array(values)
-        rows, cols = coords[:, 0], coords[:, 1]
-        mask = np.zeros((data_dict["height"], data_dict["width"]), dtype=np.uint8)
-        mask[rows, cols] = values
+        # Create mask
+        mask_values = BOX_TYPE_LABEL_MAPPING["lead_bounding_box"]
+        full_mode_lead = data_dict["full_mode_lead"]
+        for key, path_to_use in zip(keys_to_use, mask_paths_to_use):
+            # Filter for full lead
+            full_lead_length = max(
+                [
+                    lead["end_sample"] - lead["start_sample"]
+                    for lead in data_dict[key]
+                    if lead["lead_name"] == full_mode_lead
+                ]
+            )
+            data_dict[key] = [
+                lead
+                for lead in data_dict[key]
+                if lead["lead_name"] != full_mode_lead
+                or lead["end_sample"] - lead["start_sample"] == full_lead_length
+            ]
 
-        # Store
-        if rgb:
-            mask = np.stack([mask] * 3, axis=-1)
-        Image.fromarray(mask).save(path_to_use)
+            # Get labels
+            plotted_pixels = [
+                (lead[plotted_pixels_key], lead["lead_name"]) for lead in data_dict[key]
+            ]
+            plotted_pixels = {
+                tuple(np.array(item).astype("int")): subtuple[1]
+                for subtuple in plotted_pixels
+                for item in subtuple[0]
+            }
+            plotted_pixels = {
+                k: v
+                for k, v in plotted_pixels.items()
+                if k[0] < data_dict["height"] and k[1] < data_dict["width"]
+            }
+            if multilabel:
+                plotted_pixels = {k: mask_values[v] for k, v in plotted_pixels.items()}
+            else:
+                plotted_pixels = {k: 1 for k, v in plotted_pixels.items()}
+
+            # Replace mask values with correct labels
+            coords, values = zip(*plotted_pixels.items())
+            coords = np.array(coords)
+            values = np.array(values)
+            rows, cols = coords[:, 0], coords[:, 1]
+            mask = np.zeros((data_dict["height"], data_dict["width"]), dtype=np.uint8)
+            mask[rows, cols] = values
+
+            # Store
+            if rgb:
+                mask = np.stack([mask] * 3, axis=-1)
+            Image.fromarray(mask).save(path_to_use)
+
+    except Exception as e:
+        print(f"--------- ERROR IN {json_path} --------- {e} ---------")
 
 
 # Create masks in parallel

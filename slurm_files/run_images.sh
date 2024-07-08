@@ -2,9 +2,9 @@
 #SBATCH --nodes=1
 #SBATCH --mem=120G
 #SBATCH --ntasks-per-node=20
-#SBATCH --time=11:10:00
-#SBATCH --partition=medium
-#SBATCH --job-name=spl3
+#SBATCH --time=20:10:00
+#SBATCH --partition=long
+#SBATCH --job-name=spl5
 
 #SBATCH --mail-type=BEGIN,END
 #SBATCH --mail-user=wolf6245@ox.ac.uk
@@ -36,7 +36,7 @@ conda info --env
 
 
 python create_train_test.py \
-        -i /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/03000 \
+        -i /data/inet-multimodal-ai/wolf6245/data/ptb-xl/records500_prepared_w_images/05000 \
         -d /data/inet-multimodal-ai/wolf6245/data/ptb-xl/ptbxl_database.csv \
         -o /data/inet-multimodal-ai/wolf6245/data/ptb-xl/Dataset500_Signals \
         --rgba_to_rgb \
