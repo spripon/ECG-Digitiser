@@ -5,6 +5,7 @@ data/**
 **/model/**/*.png
 **/model/**/nnUNet_preprocessed/**
 !**/model/**/progress.png
+/**/**.pth
 **/temp_models/**
 **/test_outputs/**
 **/evaluation/**

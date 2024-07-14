@@ -6,7 +6,7 @@
 #SBATCH --ntasks-per-node=28
 #SBATCH --time=00:10:00
 #SBATCH --partition=devel
-#SBATCH --job-name=nn_pre
+#SBATCH --job-name=nn_train_all
 
 #SBATCH --mail-type=BEGIN,END
 #SBATCH --mail-user=wolf6245@ox.ac.uk
@@ -21,13 +21,20 @@ export nnUNet_preprocessed="/data/inet-multimodal-ai/wolf6245/src/phd/physionet2
 export nnUNet_results="/data/inet-multimodal-ai/wolf6245/src/phd/physionet24/model/nnUNet_results"
 
 # Optional: Use nnsam
-# export MODEL_NAME="nnsam"
+# export MODEL_NAME="nnunet"
 
-# 2. Experiment planning and preprocessing
-nnUNetv2_plan_and_preprocess -d 500 --clean -c 2d --verify_dataset_integrity
+# 2. Experiment planning and preprocessing # 20 h
+# nnUNetv2_plan_and_preprocess -d 500 --clean -c 2d --verify_dataset_integrity
 
 # 3. Model training # 14 h
 # nnUNetv2_train 500 2d 0 -device cuda --c
+nnUNetv2_train 500 2d all -device cuda --c
 
-# 4. Determine the best configuration
+# (Optional) 4. Determine the best configuration
 # nnUNetv2_find_best_configuration 500 -c 2d -f 0 --disable_ensembling
+
+# 5. Save
+# nnUNetv2_export_model_to_zip
+
+# 6. Unpack
+# nnUNetv2_install_pretrained_model_from_zip

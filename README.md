@@ -17,6 +17,10 @@ At the moment, it does the following:
    ```git lfs install```
 
     If it does not download the weights automatically, you can then use ```git lfs pull```
+
+2. Before you stage via git, make sure that you define which files should be handled via lfs:
+
+    ```git lfs track "*.pth"```
    
 3. Move into repo `cd physionet24`
 4. Create a new environment:
