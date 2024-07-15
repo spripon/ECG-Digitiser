@@ -4,8 +4,9 @@ data/**
 **/model/**/*.png
 **/model/**/*.png
 **/model/**/nnUNet_preprocessed/**
-!**/model/**/progress.png
 /**/**.pth
+/**/_log_*
+/**/debug.json
 **/temp_models/**
 **/test_outputs/**
 **/evaluation/**

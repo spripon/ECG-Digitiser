@@ -1215,7 +1215,8 @@ def predict_mask_nnunet(image, dataset_name):
     temp_folder_output = "data/temp_nnUNet_output"
     temp_folder_output_pp = "data/temp_nnUNet_output_pp"
     image_path_temp = os.path.join(temp_folder_input, "00000_temp_0000.png")
-    mask_path_temp = os.path.join(temp_folder_output_pp, "00000_temp.png")
+    mask_path_temp = os.path.join(temp_folder_output, "00000_temp.png")
+    #mask_path_temp = os.path.join(temp_folder_output_pp, "00000_temp.png")
 
     # Define run commands
     command_run = f"nnUNetv2_predict -d {dataset_name} -i {temp_folder_input} -o {temp_folder_output} -f  all -tr nnUNetTrainer -c 2d -p nnUNetPlans"
@@ -1238,7 +1239,7 @@ def predict_mask_nnunet(image, dataset_name):
     subprocess.run(command_run, shell=True)
 
     # Run postprocessing
-    subprocess.run(command_post_process, shell=True)
+    #subprocess.run(command_post_process, shell=True)
 
     # Load mask
     mask = read_image(mask_path_temp)
