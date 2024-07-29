@@ -80,6 +80,12 @@ def get_parser():
         default="plotted_pixels",
         help="Key for plotted pixels in json file",
     )
+    parser.add_argument(
+        "--no_split",
+        action="store_true",
+        default=False,
+        help="Whether to split or use all as training data",
+    )
     return parser
 
 
@@ -262,28 +268,34 @@ def create_mask_from_json_parallel(
 # Run the code.
 def run(args):
     # Get file paths
-    print(f"Starting to determine data groups for {args.input_data}...")
-    strat_fold_train = [1, 2, 3, 4, 5, 6, 7, 8]
-    strat_fold_vali = [9]
-    strat_fold_test = [10]
-    dg = pd.read_csv(args.database_file, index_col="ecg_id")
-    dg["file_start"] = dg.index.map(lambda x: str(x).zfill(5))
-    data_groups = {"imagesTr": [], "imagesTs": [], "imagesTv": []}
-    all_file_paths = glob.glob(f"{args.input_data}/**/*", recursive=True)
-    count_files = 0
-    for _, row in tqdm(dg.iterrows(), total=dg.shape[0]):
-        file_start = row["file_start"]
-        strat_fold = row["strat_fold"]
-        matching_paths = [path for path in all_file_paths if f"{file_start}_hr" in path]
-        count_files += len(matching_paths)
-        if strat_fold in strat_fold_train:
-            data_groups["imagesTr"].extend(matching_paths)
-        if strat_fold in strat_fold_vali:
-            data_groups["imagesTv"].extend(matching_paths)
-        if strat_fold in strat_fold_test:
-            data_groups["imagesTs"].extend(matching_paths)
+    if args.no_split:
+        print(f"Only using training data for {args.input_data}...")
+        data_groups = {"imagesTr": [], "imagesTv": [], "imagesTs": []}
+        data_groups["imagesTr"] = glob.glob(f"{args.input_data}/**/*", recursive=True)
+        count_files = len(data_groups["imagesTr"])
+    else:
+        print(f"Starting to determine data groups for {args.input_data}...")
+        strat_fold_train = [1, 2, 3, 4, 5, 6, 7, 8]
+        strat_fold_vali = [9]
+        strat_fold_test = [10]
+        dg = pd.read_csv(args.database_file, index_col="ecg_id")
+        dg["file_start"] = dg.index.map(lambda x: str(x).zfill(5))
+        data_groups = {"imagesTr": [], "imagesTs": [], "imagesTv": []}
+        all_file_paths = glob.glob(f"{args.input_data}/**/*", recursive=True)
+        count_files = 0
+        for _, row in tqdm(dg.iterrows(), total=dg.shape[0]):
+            file_start = row["file_start"]
+            strat_fold = row["strat_fold"]
+            matching_paths = [path for path in all_file_paths if f"{file_start}_hr" in path]
+            count_files += len(matching_paths)
+            if strat_fold in strat_fold_train:
+                data_groups["imagesTr"].extend(matching_paths)
+            if strat_fold in strat_fold_vali:
+                data_groups["imagesTv"].extend(matching_paths)
+            if strat_fold in strat_fold_test:
+                data_groups["imagesTs"].extend(matching_paths)
     print(
-        f"In total splitted {len(data_groups['imagesTr']) + len(data_groups['imagesTv']) + len(data_groups['imagesTs'])} files, compared to {count_files} files in the input folder {args.input_data}."
+        f"In total splitted {len(data_groups['imagesTr'])} + {len(data_groups['imagesTv'])} + {len(data_groups['imagesTs'])} files, compared to {count_files} files in the input folder {args.input_data}."
     )
 
     # Create target directories and transfer images

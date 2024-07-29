@@ -216,112 +216,92 @@ NNUNET_RESULTS = f"{os.getcwd()}/model/nnUNet_results"
 # Train your models. This function is *required*. You should edit this function to add your code, but do *not* change the arguments
 # of this function. If you do not train one of the models, then you can return None for the model.
 def train_models(data_folder, model_folder, verbose):
-    
-    #############################################################################################################################
-    # Find the data files.
-    if verbose:
-        print('Finding the Challenge data...')
-    records = find_records(data_folder)
-    num_records = len(records)
-    if num_records == 0:
-        raise FileNotFoundError('No data were provided.')
-    
-    if verbose:
-        print('Extracting features and labels from the data...')
-    digitization_features = list()
-    classification_features = list()
-    classification_labels = list()
-    for i in range(num_records):
-        if verbose:
-            width = len(str(num_records))
-            print(f'- {i+1:>{width}}/{num_records}: {records[i]}...')
-        record = os.path.join(data_folder, records[i])
-        features = extract_features(record)
-        digitization_features.append(features)
-        labels = load_labels(record)
-        if any(label for label in labels):
-            classification_features.append(features)
-            classification_labels.append(labels)
-    if not classification_labels:
-        raise Exception('There are no labels for the data.')
-
 
     #############################################################################################################################
     # Train the digitization model.
-    if verbose:
-        print('Training the digitization model...')
-    digitization_model = np.mean(features)
+    digitization_model = None
+    train_nnunet = False
     
-    # Generate images and json files
-    # from ecg-image-kit.codes.ecg-image-generator.gen_ecg_images_from_data_batch import get_parser as get_parser_gen, run as gen_ecg_images_from_data_batch
-    # args = get_parser_gen()
-    # args.input_directory = data_folder
-    # args.output_directory = data_folder
-    # args.seed = 10
-    # args.mask_unplotted_samples = True
-    # args.print_header = True
-    # args.store_config = 2
-    # args.lead_name_bbox = True
-    # args.lead_bbox = True
-    # args.random_print_header = 0.7
-    # args.calibration_pulse = 0.8
-    # args.wrinkles = True
-    # args.augment = True
-    # args.rotate = 5
-    # args.num_images_per_ecg = 1
-    # gen_ecg_images_from_data_batch(args)
-    
-    # Prepare images
-    # from prepare_image_data import get_parser as get_parser_prep, run as prepare_image_data
-    # args = get_parser_prep()
-    # args.input_folder = data_folder
-    # args.output_folder = data_folder
-    # prepare_image_data(args)
-    
-    # Replot pixels
-    # from replot_pixels import resample_pixels_in_dir
-    # resample_pixels_in_dir(data_folder, 7)
-    
-    # Create train test split
-    # from create_train_test import get_parser as get_parser_create, run as create_train_test
-    # args = get_parser_create()
-    # args.input_data = data_folder
-    # args.output_folder = os.path.join(data_folder, 'Dataset500_Signals')
-    # args.database_file = 'ptbxl_database.csv'
-    # args.rgba_to_rgb = True
-    # args.gray_to_rgb = True
-    # args.mask = True
-    # args.mask_multilabel = True
-    # args.rotate_image = True
-    # args.plotted_pixels_key = "dense_plotted_pixels"
-    # create_train_test(args)
-    
-    # Train model
-    # os.environ["nnUNet_raw"] = NNUNET_RAW
-    # os.environ["nnUNet_preprocessed"] = NNUNET_PREPROCESSED
-    # os.environ["nnUNet_results"] = NNUNET_RESULTS
-    # command_run_preprocess = "nnUNetv2_plan_and_preprocess -d 500 --clean -c 2d --verify_dataset_integrity"
-    # command_run_train = "nnUNetv2_train 500 2d 0 -device cuda --c"
-    # subprocess.run(command_run_preprocess, shell=True)
-    # subprocess.run(command_run_train, shell=True)
+    if train_nnunet:
+        def convert_dict_to_args(args_dict):
+            args_list = []
+            for key, value in args_dict.items():
+                if isinstance(value, bool):
+                    if value:
+                        args_list.append(f'--{key}')
+                else:
+                    args_list.append(f'--{key}')
+                    args_list.append(str(value))
+            return args_list
+        
+        # Generate images and json files
+        from gen_ecg_images_from_data_batch import get_parser as get_parser_gen, run as gen_ecg_images_from_data_batch
+        args_dict = {
+            'input_directory': data_folder,
+            'output_directory': data_folder,
+            'seed': 10,
+            'mask_unplotted_samples': True,
+            'print_header': True,
+            'store_config': 2,
+            'lead_name_bbox': True,
+            'lead_bbox': True,
+            'random_print_header': 0.7,
+            'calibration_pulse': 0.8,
+            'wrinkles': True,
+            'augment': True,
+            'rotate': 5,
+            'num_images_per_ecg': 1
+        }
+        if verbose:
+            print('Generating images...')
+        gen_ecg_images_from_data_batch(get_parser_gen().parse_args(convert_dict_to_args(args_dict)))
+        
+        # Prepare images
+        from prepare_image_data import get_parser as get_parser_prep, run as prepare_image_data
+        args_dict = {
+            'input_folder': data_folder,
+            'output_folder': data_folder,
+        }
+        if verbose:
+            print('Preparing images...')
+        prepare_image_data(get_parser_prep().parse_args(convert_dict_to_args(args_dict)))
+        
+        # Replot pixels
+        from replot_pixels import resample_pixels_in_dir
+        if verbose:
+            print('Resampling pixels...')
+        resample_pixels_in_dir(data_folder, 7)
+        
+        # Create train test split
+        from create_train_test import get_parser as get_parser_create, run as create_train_test
+        args_dict = {
+            'input_data': data_folder,
+            'output_folder': os.path.join(data_folder, 'Dataset500_Signals'),
+            'database_file': 'ptbxl_database.csv',
+            'rgba_to_rgb': True,
+            'gray_to_rgb': True,
+            'mask': True,
+            'mask_multilabel': True,
+            'rotate_image': True,
+            'plotted_pixels_key': "dense_plotted_pixels",
+            "no_split": True
+        }
+        create_train_test(get_parser_create().parse_args(convert_dict_to_args(args_dict)))
+        
+        # Train model
+        os.environ["nnUNet_raw"] = data_folder
+        os.environ["nnUNet_preprocessed"] = NNUNET_PREPROCESSED
+        os.environ["nnUNet_results"] = NNUNET_RESULTS
+        command_run_preprocess = "nnUNetv2_plan_and_preprocess -d 500 --clean -c 2d --verify_dataset_integrity"
+        command_run_train = "nnUNetv2_train 500 2d all -device cuda --c"
+        subprocess.run(command_run_preprocess, shell=True)
+        subprocess.run(command_run_train, shell=True)
     
 
     #############################################################################################################################
     # Train the classification model. If you are not training a classification model, then you can remove this part of the code.
-
-    # This very simple model trains a random forest model with these very simple features.
-    classification_features = np.vstack(classification_features)
-    classes = sorted(set.union(*map(set, classification_labels)))
-    classification_labels = compute_one_hot_encoding(classification_labels, classes)
-
-    # Define parameters for random forest classifier and regressor.
-    n_estimators   = 12  # Number of trees in the forest.
-    max_leaf_nodes = 34  # Maximum number of leaf nodes in each tree.
-    random_state   = 56  # Random state; set for reproducibility.
-
-    # Fit the model.
-    classification_model = RandomForestClassifier(
-        n_estimators=n_estimators, max_leaf_nodes=max_leaf_nodes, random_state=random_state).fit(classification_features, classification_labels)
+    classification_model = None
+    classes = None
     
     
     #############################################################################################################################
@@ -405,16 +385,6 @@ def run_models(record, digitization_model, classification_model, verbose):
     signal = np.array(signal_list).T
     
     # Run the classification model; if you did not train this model, then you can set labels = None.
-
-    # Load the classification model and classes.
-    # model = classification_model['model']
-    # classes = classification_model['classes']
-    # features = extract_features(record)
-    # features = features.reshape(1, -1)
-    # probabilities = model.predict_proba(features)
-    # probabilities = np.asarray(probabilities, dtype=np.float32)[:, 0, 1]
-    # max_probability = np.nanmax(probabilities)
-    # labels = [classes[i] for i, probability in enumerate(probabilities) if probability == max_probability]
     labels = None
 
     return signal, labels
