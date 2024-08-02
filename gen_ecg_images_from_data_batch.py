@@ -156,6 +156,9 @@ def run(args):
         # Prepare arguments for each file pair
         prepared_args = [prepare_args(args, full_header_file, full_recording_file, original_output_dir) for full_header_file, full_recording_file in zip(full_header_files, full_recording_files)]
         
+        if args.overwrite:
+            print("Overwriting existing files.")
+        
         # Run the files in parallel or sequentially
         if args.run_in_parallel:
             print("Running in parallel...")

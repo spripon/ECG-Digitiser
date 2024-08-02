@@ -299,7 +299,7 @@ You can train your model(s) by running
 
 For example:
 
-    python train_model.py -d /data/wolf6245/data/ptb-xl/test -m model -v
+    python train_model.py -d /data/wolf6245/data/ptb-xl/test_records500_prepared -m model -v
 
 where
 
@@ -314,7 +314,7 @@ You can run your trained model(s) by running
 
 e.g.
 
-    python run_model.py -d /data/wolf6245/data/ptb-xl/test -m model -o data/test_outputs -v
+    python run_model.py -d /data/wolf6245/data/ptb-xl/test_Dataset500_Signals/imagesTs_original -m model -o data/test_outputs -v
 
 where
 
@@ -332,7 +332,7 @@ You can evaluate your model by running
 
 e.g.
 
-    python evaluate_model.py -d /data/wolf6245/data/ptb-xl/test -o data/test_outputs -s data/evaluation/scores.csv
+    python evaluate_model.py -d /data/wolf6245/data/ptb-xl/test_Dataset500_Signals/imagesTs_original -o data/test_outputs -s data/evaluation/scores.csv
 
 where
 

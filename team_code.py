@@ -10,8 +10,10 @@
 ################################################################################
 
 # General libraries
+import librosa
 import joblib
 import json
+import math
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 import matplotlib.gridspec as gridspec
@@ -29,7 +31,7 @@ from dataclasses import dataclass, field
 from collections import OrderedDict
 from tempfile import TemporaryDirectory
 from tqdm import tqdm
-from typing import List, Callable, Optional
+from typing import List, Callable, Optional, Tuple
 
 # ML libraries
 import cv2
@@ -45,8 +47,9 @@ import torch.optim as optim
 import torch.multiprocessing as mp
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
+from torchvision import transforms
 from torchvision.datasets import VisionDataset
 from torchvision.io.image import read_image, write_png
 from torchvision.models import get_model, get_weight
@@ -95,10 +98,22 @@ else:
     WORLD_SIZE = 1
 
 # General settings
-X_FREQUENCY = 500
-NC = 3
 BATCH_SIZE = 32
 SEED = 42
+
+# Classification settings
+DO_CLASSIFICATION = False
+VALI_SIZE = 0.2
+EPOCHS_CLASSIFICATION = 10
+CLASSIFICATION_THRESHOLD=0.5
+MODEL_NAME_CLASSIFICATION = "resnet50"
+IMAGE_BASED_CLASSIFICATION = False
+USE_SPECTROGRAMS = IMAGE_BASED_CLASSIFICATION
+NC_CLASSIFICATION = 3
+
+# General digitization settings
+X_FREQUENCY = 500
+NC = 3
 IMG_SIZE = (50, 500)
 IMAGES_PARTS_FOR_GRID_PREDICTION = (0.7, 0.05, 1.0, 0.25)  # relative: (x1,y1,x2,y2)
 
@@ -216,13 +231,16 @@ NNUNET_RESULTS = f"{os.getcwd()}/model/nnUNet_results"
 # Train your models. This function is *required*. You should edit this function to add your code, but do *not* change the arguments
 # of this function. If you do not train one of the models, then you can return None for the model.
 def train_models(data_folder, model_folder, verbose):
+    
+    train_nnunet = True
+    train_classification = DO_CLASSIFICATION
 
     #############################################################################################################################
     # Train the digitization model.
-    digitization_model = None
-    train_nnunet = False
-    
     if train_nnunet:
+        if verbose:
+            print('Training digitization model...')
+        
         def convert_dict_to_args(args_dict):
             args_list = []
             for key, value in args_dict.items():
@@ -250,11 +268,14 @@ def train_models(data_folder, model_folder, verbose):
             'wrinkles': True,
             'augment': True,
             'rotate': 5,
-            'num_images_per_ecg': 1
+            'num_images_per_ecg': 1,
+            'overwrite': True,
         }
+        args = get_parser_gen().parse_args(convert_dict_to_args(args_dict))
         if verbose:
-            print('Generating images...')
-        gen_ecg_images_from_data_batch(get_parser_gen().parse_args(convert_dict_to_args(args_dict)))
+            print('--------- Generating images... ---------')
+            print(args)
+        gen_ecg_images_from_data_batch(args)
         
         # Prepare images
         from prepare_image_data import get_parser as get_parser_prep, run as prepare_image_data
@@ -263,13 +284,13 @@ def train_models(data_folder, model_folder, verbose):
             'output_folder': data_folder,
         }
         if verbose:
-            print('Preparing images...')
+            print('--------- Preparing images... ---------')
         prepare_image_data(get_parser_prep().parse_args(convert_dict_to_args(args_dict)))
         
         # Replot pixels
         from replot_pixels import resample_pixels_in_dir
         if verbose:
-            print('Resampling pixels...')
+            print('--------- Resampling pixels... ---------')
         resample_pixels_in_dir(data_folder, 7)
         
         # Create train test split
@@ -284,11 +305,18 @@ def train_models(data_folder, model_folder, verbose):
             'mask_multilabel': True,
             'rotate_image': True,
             'plotted_pixels_key': "dense_plotted_pixels",
-            "no_split": True
+            "no_split": True,
+            "move": True,
         }
+        if verbose:
+            print('--------- Creating train test split... ---------')
         create_train_test(get_parser_create().parse_args(convert_dict_to_args(args_dict)))
+        print()
+        print()
         
-        # Train model
+        # # Train model
+        if verbose:
+            print('--------- Training nnUNet model... ---------')
         os.environ["nnUNet_raw"] = data_folder
         os.environ["nnUNet_preprocessed"] = NNUNET_PREPROCESSED
         os.environ["nnUNet_results"] = NNUNET_RESULTS
@@ -297,41 +325,73 @@ def train_models(data_folder, model_folder, verbose):
         subprocess.run(command_run_preprocess, shell=True)
         subprocess.run(command_run_train, shell=True)
     
+    else:
+        if verbose:
+            print('No digitization model trained.')
 
     #############################################################################################################################
     # Train the classification model. If you are not training a classification model, then you can remove this part of the code.
-    classification_model = None
-    classes = None
-    
-    
-    #############################################################################################################################
-    # Save the models.
-    os.makedirs(model_folder, exist_ok=True)
-    save_models(model_folder, digitization_model, classification_model, classes)
+    if train_classification:
+        
+        if verbose:
+            print()
+            print('Training classification model...')
+        
+        # Get the records
+        records = find_records(data_folder)
+        random.seed(SEED)
+        random.shuffle(records)
+        vali_size = int(len(records) * VALI_SIZE)
+        train_ids = records[vali_size:]
+        vali_ids = records[:vali_size]
+        
+        # Get datasets and loader
+        train_dataset = ClassificationDataset(data_folder, device=DEVICE, records_to_use=train_ids, spectrograms=False)
+        vali_dataset = ClassificationDataset(data_folder, device=DEVICE, records_to_use=vali_ids, spectrograms=False)
+        train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, pin_memory=True)
+        vali_loader = DataLoader(vali_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=True)
+        
+        # Define torch model
+        model_to_use = get_model_own(MODEL_NAME_CLASSIFICATION, len(train_dataset.classes), image_based=IMAGE_BASED_CLASSIFICATION, input_shape=train_dataset[0][0].shape[-2:])
+        criterion = nn.BCEWithLogitsLoss()
+        optimizer = torch.optim.Adam(model_to_use.parameters(), lr=0.001)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=7, gamma=0.1)
+        classification_model_trainer = Trainer(
+            model=model_to_use,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            criterion=criterion,
+            num_epochs=EPOCHS_CLASSIFICATION,
+            device=DEVICE,
+            model_dir=model_folder,
+        )
+        
+        # Train the model
+        os.makedirs(model_folder, exist_ok=True)
+        classification_model = classification_model_trainer.fit(train_loader, vali_loader)
+        
+    else:
+        if verbose:
+            print('No classification model trained.')
+        
     if verbose:
         print('Done.')
         print()
 
 
-# Load your trained models. This function is *required*. You should edit this function to add your code, but do *not* change the
-# arguments of this function. If you do not train one of the models, then you can return None for the model.
-def load_models(model_folder, verbose):
-    digitization_filename = os.path.join(model_folder, 'digitization_model.sav')
-    digitization_model = joblib.load(digitization_filename)
-
-    classification_filename = os.path.join(model_folder, 'classification_model.sav')
-    classification_model = joblib.load(classification_filename)
-    return digitization_model, classification_model
-
 # Run your trained digitization model. This function is *required*. You should edit this function to add your code, but do *not*
 # change the arguments of this function. If you did not train one of the models, then you can return None for the model.
 def run_models(record, digitization_model, classification_model, verbose):
 
+    #############################################################################################################################
+    # Run the digitization model.
+    if verbose:
+        print('Running digitization model...')
+    
     # Load info and image
     header_file = get_header_file(record)
     header = load_text(header_file)
     num_samples = get_num_samples(header)
-    num_signals = get_num_signals(header)
     signal_names = get_signal_names(header)
     path = os.path.split(record)[0]
     image_file = get_image_files(record)[0]
@@ -350,8 +410,16 @@ def run_models(record, digitization_model, classification_model, verbose):
     signal_masks_cropped, signal_positions_cropped, _ = cut_binary(mask_to_use, image_rotated, signal_names)
 
     # Vecotrise
-    sec_per_pixel = get_sec_per_pixel(get_mm_per_pixel(39.37))
-    mV_per_pixel = get_mV_per_pixel(get_mm_per_pixel(39.37))
+    ## mm per pixel:
+    x_pixel_list = [v.shape[2] for v in signal_masks_cropped.values()]
+    x_pixel_list_median = np.median(x_pixel_list)
+    x_pixel_list_below_2x_median_mean = np.mean([v for v in x_pixel_list if v < 2 * x_pixel_list_median])
+    sec_per_pixel = 2.5/x_pixel_list_below_2x_median_mean
+    mm_per_pixel = 25 * sec_per_pixel
+    ## sec and mV per pixel
+    sec_per_pixel = get_sec_per_pixel(mm_per_pixel)
+    mV_per_pixel = get_mV_per_pixel(mm_per_pixel)
+    ## Vectorise
     signals_predicted = {}
     for lead, mask in signal_masks_cropped.items():
         signals_predicted[lead] = vectorise(
@@ -384,8 +452,20 @@ def run_models(record, digitization_model, classification_model, verbose):
             signal_list.append(signal)
     signal = np.array(signal_list).T
     
-    # Run the classification model; if you did not train this model, then you can set labels = None.
-    labels = None
+    
+    #############################################################################################################################
+    # Run the classification model.
+    if DO_CLASSIFICATION:
+        if verbose:
+            print()
+            print('Running classification model...')
+        labels = run_classification_model(signal, classification_model["model"], classification_model["classes"])
+    else:
+        labels = None
+        if verbose:
+            print()
+            print('No classification model run.')
+            print()
 
     return signal, labels
 
@@ -396,10 +476,239 @@ def run_models(record, digitization_model, classification_model, verbose):
 #
 ################################################################################
 
+################################################################################
+# Classification model
+################################################################################
+
+def get_signals(records: List[str], data_folder: str) -> Tuple[np.ndarray, np.ndarray, List[str], List[int]]:
+    classification_signals = list()
+    classification_labels = list()
+    sampling_frequencies = list()
+    for record_name in records:
+        record_path = os.path.join(data_folder, record_name)
+        signals, fields = load_signals(record_path)
+        header = load_header(record_path)
+        frequency = get_sampling_frequency(header)
+        labels = load_labels(record_path)
+        if any(label for label in labels):
+            classification_signals.append(signals)
+            classification_labels.append(labels)
+            sampling_frequencies.append(frequency)
+    classes = sorted(set.union(*map(set, classification_labels)))
+    classification_labels = compute_one_hot_encoding(classification_labels, classes)
+    classification_signals = np.array(classification_signals)
+    
+    assert classification_labels.shape[1] == len(classes), f"Number of classes {len(classes)} does not match the number of labels {labels.shape[1]}"
+    assert classification_labels.shape[0] == classification_signals.shape[0], f"Number of signals {signals.shape[0]} does not match the number of labels {labels.shape[0]}"
+    
+    return classification_signals, classification_labels, classes, sampling_frequencies
+
+
+def standardise_signal(signal, median_freq, seconds=10, num_channels=1, use_longer = False):
+    # Filter for short signals
+    num_nans = np.isnan(signal).sum(axis=0) # Number of nans per signal
+    num_nans_median = np.median(num_nans) # Median number of nans divided by 2
+    if use_longer:
+        signal_filtered = signal[:, num_nans < (num_nans_median/2)]
+    else:
+        signal_filtered = signal[:, num_nans >= (num_nans_median/2)] # Only use signals that have more nans than num_nans_median_2
+
+    # If more than num_channels signals left, use the first num_channels
+    if signal_filtered.shape[1] > num_channels:
+        signal_filtered = signal_filtered[:, :num_channels]
+        
+    # If less than num_channels signals left, repeat
+    if signal_filtered.shape[1] <= num_channels:
+        num_to_repeat = math.ceil(num_channels / signal_filtered.shape[1])
+        signal_filtered = np.tile(signal_filtered, num_to_repeat)[:, :num_channels]
+
+    # Filter all signals to non nans and cut them to required_samples or pad them
+    required_samples = int(seconds * median_freq)
+    signal_filtered_non_nan = []
+    for i in range(signal_filtered.shape[1]):
+        signal_i = signal_filtered[:, i]
+        signal_i_non_nan = signal_i[~np.isnan(signal_i)]
+        if len(signal_i_non_nan) < required_samples:
+            signal_i_non_nan = np.pad(signal_i_non_nan, (0, required_samples - len(signal_i_non_nan)))
+        else:
+            signal_i_non_nan = signal_i_non_nan[:required_samples]
+        signal_filtered_non_nan.append(signal_i_non_nan)
+    signal_filtered_non_nan = np.array(signal_filtered_non_nan)
+    
+    return signal_filtered_non_nan
+
+
+# Convert to spectrograms using librosa
+def convert_to_spectrogram(signal, median_freq, n_fft=1024, hop_length=512, n_mels=64):
+    """Convert a signal to a spectrogram using librosa.
+    
+    Args:
+        signal (np.array): The signal to convert.
+        median_freq (int): The median frequency of the signal.
+        n_fft (int): The number of samples to use for each fourier transform. Larger n_fft values result in higher frequency resolution but lower time resolution.
+        hop_length (int): The number of samples between each frame. Smaller hop_length values increase the overlap, resulting in more windows and better time resolution. However, this also increases computational cost.
+        n_mels (int): The number of Mel bands to use. More Mel bands provide finer frequency resolution in the Mel spectrogram but increase computational cost.
+        
+    Returns:
+        np.array: The spectrogram.
+    """
+    # Get spectrograms
+    mel_spec = librosa.feature.melspectrogram(y=signal, sr=median_freq, n_fft=n_fft, hop_length=hop_length, n_mels=n_mels)
+    log_mel_spec = librosa.power_to_db(mel_spec, ref=np.max)
+    return log_mel_spec
+
+
+# Use the classification model to predict the labels
+def run_classification_model(signal: np.ndarray, model, classes: List[str], frequency: int = 500) -> List[str]:
+    """Run the classification model on the signal.
+    
+    Args:
+        signal: The signal to classify of shape (num_samples, num_leads). Only for the full signal 5000 samples will be available.
+        model: The classification model.
+        classes (List[str]): The classes to predict.
+    """
+        
+    # Get signals
+    signal_standardized = standardise_signal(signal, frequency, 2.5, 11, False)
+    signals = torch.tensor(signal_standardized)
+    signals = nn.functional.normalize(signals)
+    signals = signals.to(torch.float32).to(DEVICE)
+    
+    # Predict labels
+    model.eval()
+    with torch.no_grad():
+        prob_predicted = model(signals)
+    
+    # Convert the labels
+    labels = [classes[i] for i in range(len(classes)) if prob_predicted[0, i] > CLASSIFICATION_THRESHOLD]
+    
+    return labels
+
+
+class ClassificationDataset(Dataset):
+    def __init__(self, data_folder, device, records_to_use=None):
+        self.data_folder = data_folder
+        self.device = device
+        self.records_to_use = records_to_use
+        if self.records_to_use:
+            self.records = self.records_to_use
+        else:
+            self.records = find_records(data_folder)
+        self.signals, self.labels, self.classes, sampling_frequencies = get_signals(self.records, self.data_folder)
+        self.median_freq = np.median(sampling_frequencies)
+        self.n_fft = 32
+        self.hop_length = 16
+        self.n_mels = 32
+        self.spectrograms = USE_SPECTROGRAMS
+        self.nc = NC_CLASSIFICATION
+        self.target_size = [256, 256]
+        self.transform = transforms.Compose([
+            transforms.Resize(self.target_size),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+
+    def __len__(self):
+        return len(self.signals)
+
+    def __getitem__(self, idx):
+        
+        # Get labels
+        label = self.labels[idx]
+        
+        # Prepare signals
+        signal = self.signals[idx]
+        if self.spectrograms:
+            signal_standardized = standardise_signal(signal, self.median_freq, 10, 1, True)
+            spectrogram = convert_to_spectrogram(signal_standardized, self.median_freq, n_fft=self.n_fft, hop_length=self.hop_length, n_mels=self.n_mels)
+            if self.transform:
+                signals = self.transform(spectrogram)
+            if self.nc == 3:
+                if signals.shape[0] == 1:
+                    signals = torch.cat([signals, signals, signals], dim=0)
+            if self.nc == 1:
+                if signals.shape[0] == 3:
+                    signals = signals[0, :, :]
+        else:
+            signal_standardized = standardise_signal(signal, self.median_freq, 2.5, 11, False)
+            signals = torch.tensor(signal_standardized)
+            signals = nn.functional.normalize(signals)
+        
+        # Convert
+        signals = signals.to(torch.float32).to(self.device)
+        labels = torch.tensor(label).to(torch.float32).to(self.device)
+        return signals, labels
+
+
+def get_model_own(model_name, num_classes, image_based=True, input_shape=None):
+    if image_based:
+        model = eval(f"models.{model_name}(pretrained=True)")
+        num_ftrs = model.fc.in_features
+        model.fc = nn.Linear(num_ftrs, num_classes)
+        model = ResNetMultiLabel(model)
+    else:
+        model = SimpleNN(input_shape, num_classes)
+    return model.to(DEVICE)
+
+
+class ResNetMultiLabel(nn.Module):
+    def __init__(self, base_model):
+        super(ResNetMultiLabel, self).__init__()
+        self.base_model = base_model
+        
+    def forward(self, x):
+        x = self.base_model(x)
+        x = torch.sigmoid(x)  # Apply sigmoid activation to the outputs
+        return x
+
+
+class SimpleNN(nn.Module):
+    def __init__(self, input_shape, num_classes):
+        super(SimpleNN, self).__init__()
+        
+        # Calculate the number of input features
+        self.input_features = input_shape[0] * input_shape[1]
+        
+        # Define the layers of the network
+        self.fc1 = nn.Linear(self.input_features, 512)  # First fully connected layer
+        self.fc2 = nn.Linear(512, 256)  # Second fully connected layer
+        self.fc3 = nn.Linear(256, num_classes)  # Output layer
+        
+    def forward(self, x):
+        x = x.view(-1, self.input_features)  # Flatten the input tensor
+        x = torch.relu(self.fc1(x))  # Apply ReLU activation function
+        x = torch.relu(self.fc2(x))  # Apply ReLU activation function
+        x = self.fc3(x)  # Output layer
+        x = torch.sigmoid(x)  # Apply sigmoid activation function
+        return x
+
 
 ################################################################################
-# Save models
+# Save and load models
 ################################################################################
+
+# Load your trained models. This function is *required*. You should edit this function to add your code, but do *not* change the
+# arguments of this function. If you do not train one of the models, then you can return None for the model.
+def load_models(model_folder, verbose):
+
+    # Load the digitization model
+    digitization_model = None
+    
+    # Get classification model
+    if DO_CLASSIFICATION:
+        classification_dict = torch.load(os.path.join(model_folder, "classification_model.pth"))
+        classes = classification_dict["classes"]
+        input_shape = classification_dict["input_shape"]
+        model_state_dict = classification_dict["model_state_dict"]
+        model_name = classification_dict["model_name"]
+        image_based = classification_dict["image_based"]
+        model = get_model_own(model_name, len(classes), image_based=image_based, input_shape=input_shape)
+        model.load_state_dict(model_state_dict)
+        classification_model = {"model": model, "classes": classes}
+    else:
+        classification_model = None
+    
+    return digitization_model, classification_model
 
 
 # Save your trained digitization model.
@@ -408,23 +717,9 @@ def save_torch_model(model_folder, model, model_name):
     torch.save(model.state_dict(), filename_model)
 
 
-# Save your trained models.
-def save_models(model_folder, digitization_model=None, classification_model=None, classes=None):
-    if digitization_model is not None:
-        d = {'model': digitization_model}
-        filename = os.path.join(model_folder, 'digitization_model.sav')
-        joblib.dump(d, filename, protocol=0)
-
-    if classification_model is not None:
-        d = {'model': classification_model, 'classes': classes}
-        filename = os.path.join(model_folder, 'classification_model.sav')
-        joblib.dump(d, filename, protocol=0)
-
-
 ################################################################################
 # Data loaders
 ################################################################################
-
 
 # Extract features.
 def extract_features(record):
@@ -1608,7 +1903,7 @@ def compute_snr_batch(output, target, reduction="mean"):
     snrs = list()
     for i in range(output.shape[0]):
         for j in range(output[i].shape[1]):
-            snr = compute_snr(
+            snr, p_signal, p_noise = compute_snr(
                 output[i][:, j].detach().cpu().numpy(),
                 target[i][:, j].detach().cpu().numpy(),
             )
