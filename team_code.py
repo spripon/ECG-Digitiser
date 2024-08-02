@@ -11,6 +11,7 @@
 
 # General libraries
 import librosa
+import multiprocessing
 import joblib
 import json
 import math
@@ -37,6 +38,7 @@ from typing import List, Callable, Optional, Tuple
 import cv2
 from PIL import Image
 from imgaug import augmenters as iaa
+from sklearn.metrics import f1_score
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.model_selection import train_test_split
 
@@ -46,10 +48,11 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.multiprocessing as mp
 import torch.distributed as dist
+import torchmetrics
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
-from torchvision import transforms
+from torchvision import transforms, models
 from torchvision.datasets import VisionDataset
 from torchvision.io.image import read_image, write_png
 from torchvision.models import get_model, get_weight
@@ -92,6 +95,7 @@ DEVICE = torch.device(
 )
 # DEVICE = torch.device("cpu")
 NUM_WORKERS = 8
+multiprocessing.set_start_method('spawn', force=True)
 if DEVICE.type == "cuda":
     WORLD_SIZE = torch.cuda.device_count()
 else:
@@ -104,14 +108,15 @@ SEED = 42
 # Classification settings
 DO_CLASSIFICATION = False
 VALI_SIZE = 0.2
-EPOCHS_CLASSIFICATION = 10
+EPOCHS_CLASSIFICATION = 200
 CLASSIFICATION_THRESHOLD=0.5
-MODEL_NAME_CLASSIFICATION = "resnet50"
 IMAGE_BASED_CLASSIFICATION = False
 USE_SPECTROGRAMS = IMAGE_BASED_CLASSIFICATION
+MODEL_NAME_CLASSIFICATION = "resnet50"
 NC_CLASSIFICATION = 3
 
 # General digitization settings
+TRAIN_NNUNET = True
 X_FREQUENCY = 500
 NC = 3
 IMG_SIZE = (50, 500)
@@ -232,12 +237,73 @@ NNUNET_RESULTS = f"{os.getcwd()}/model/nnUNet_results"
 # of this function. If you do not train one of the models, then you can return None for the model.
 def train_models(data_folder, model_folder, verbose):
     
-    train_nnunet = True
+    train_nnunet = TRAIN_NNUNET
     train_classification = DO_CLASSIFICATION
+    
+    #############################################################################################################################
+    # Train the classification model. If you are not training a classification model, then you can remove this part of the code.
+    if train_classification:
+        
+        if verbose:
+            print()
+            print('Training classification model...')
+        
+        # Get the records
+        records = find_records(data_folder)
+        random.seed(SEED)
+        random.shuffle(records)
+        vali_size = int(len(records) * VALI_SIZE)
+        train_ids = records[vali_size:]
+        vali_ids = records[:vali_size]
+        
+        # Get datasets and loader
+        train_dataset = ClassificationDataset(data_folder, records_to_use=train_ids)
+        vali_dataset = ClassificationDataset(data_folder, records_to_use=vali_ids)
+        train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, pin_memory=True)
+        vali_loader = DataLoader(vali_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=True)
+        
+        # Define torch model
+        model_to_use = get_model_own(MODEL_NAME_CLASSIFICATION, len(train_dataset.classes), image_based=IMAGE_BASED_CLASSIFICATION, input_shape=train_dataset[0]['image'].shape[-2:])
+        criterion = nn.BCEWithLogitsLoss()
+        optimizer = torch.optim.Adam(model_to_use.parameters(), lr=0.001)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=7, gamma=0.1)
+        metrics = [calculate_f1_score]
+        classification_model_trainer = Trainer(
+            model=model_to_use,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            criterion=criterion,
+            num_epochs=EPOCHS_CLASSIFICATION,
+            device=DEVICE,
+            model_dir=model_folder,
+            metrics=metrics,
+            use_best_model=False,
+        )
+        
+        # Train the model
+        os.makedirs(model_folder, exist_ok=True)
+        classification_model = classification_model_trainer.fit(train_loader, vali_loader)
+        
+        # Save
+        model_dict = {
+            "classes": train_dataset.classes,
+            "image_based": IMAGE_BASED_CLASSIFICATION,
+            "input_shape": train_dataset[0]['image'].shape[-2:],
+            "model_state_dict": classification_model.state_dict(),
+            "model_name": MODEL_NAME_CLASSIFICATION,
+            "image_based": IMAGE_BASED_CLASSIFICATION
+        }
+        torch.save(model_dict, f"{model_folder}/classification_model.pth")
+        
+    else:
+        if verbose:
+            print('No classification model trained.')
+
 
     #############################################################################################################################
     # Train the digitization model.
     if train_nnunet:
+        
         if verbose:
             print('Training digitization model...')
         
@@ -328,51 +394,6 @@ def train_models(data_folder, model_folder, verbose):
     else:
         if verbose:
             print('No digitization model trained.')
-
-    #############################################################################################################################
-    # Train the classification model. If you are not training a classification model, then you can remove this part of the code.
-    if train_classification:
-        
-        if verbose:
-            print()
-            print('Training classification model...')
-        
-        # Get the records
-        records = find_records(data_folder)
-        random.seed(SEED)
-        random.shuffle(records)
-        vali_size = int(len(records) * VALI_SIZE)
-        train_ids = records[vali_size:]
-        vali_ids = records[:vali_size]
-        
-        # Get datasets and loader
-        train_dataset = ClassificationDataset(data_folder, device=DEVICE, records_to_use=train_ids, spectrograms=False)
-        vali_dataset = ClassificationDataset(data_folder, device=DEVICE, records_to_use=vali_ids, spectrograms=False)
-        train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, pin_memory=True)
-        vali_loader = DataLoader(vali_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=True)
-        
-        # Define torch model
-        model_to_use = get_model_own(MODEL_NAME_CLASSIFICATION, len(train_dataset.classes), image_based=IMAGE_BASED_CLASSIFICATION, input_shape=train_dataset[0][0].shape[-2:])
-        criterion = nn.BCEWithLogitsLoss()
-        optimizer = torch.optim.Adam(model_to_use.parameters(), lr=0.001)
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=7, gamma=0.1)
-        classification_model_trainer = Trainer(
-            model=model_to_use,
-            optimizer=optimizer,
-            scheduler=scheduler,
-            criterion=criterion,
-            num_epochs=EPOCHS_CLASSIFICATION,
-            device=DEVICE,
-            model_dir=model_folder,
-        )
-        
-        # Train the model
-        os.makedirs(model_folder, exist_ok=True)
-        classification_model = classification_model_trainer.fit(train_loader, vali_loader)
-        
-    else:
-        if verbose:
-            print('No classification model trained.')
         
     if verbose:
         print('Done.')
@@ -509,7 +530,7 @@ def standardise_signal(signal, median_freq, seconds=10, num_channels=1, use_long
     num_nans = np.isnan(signal).sum(axis=0) # Number of nans per signal
     num_nans_median = np.median(num_nans) # Median number of nans divided by 2
     if use_longer:
-        signal_filtered = signal[:, num_nans < (num_nans_median/2)]
+        signal_filtered = signal[:, num_nans <= (num_nans_median/2)]
     else:
         signal_filtered = signal[:, num_nans >= (num_nans_median/2)] # Only use signals that have more nans than num_nans_median_2
 
@@ -569,12 +590,27 @@ def run_classification_model(signal: np.ndarray, model, classes: List[str], freq
     """
         
     # Get signals
-    signal_standardized = standardise_signal(signal, frequency, 2.5, 11, False)
-    signals = torch.tensor(signal_standardized)
-    signals = nn.functional.normalize(signals)
+    if USE_SPECTROGRAMS:
+        signal_standardized = standardise_signal(signal, frequency, 10, 1, True)
+        spectrogram = convert_to_spectrogram(signal_standardized, frequency, n_fft=32, hop_length=16, n_mels=32)
+        spectrogram = torch.tensor(spectrogram)
+        if NC_CLASSIFICATION == 3:
+            if spectrogram.shape[0] == 1:
+                spectrogram = torch.cat([spectrogram, spectrogram, spectrogram], dim=0)
+        if NC_CLASSIFICATION == 1:
+            if spectrogram.shape[0] == 3:
+                spectrogram = spectrogram[0, :, :]
+        if self.transform:
+            signals = self.transform(spectrogram)
+    else:
+        signal_standardized = standardise_signal(signal, frequency, 2.5, 11, False)
+        signals = torch.tensor(signal_standardized)
+        signals = nn.functional.normalize(signals)
+    
     signals = signals.to(torch.float32).to(DEVICE)
     
     # Predict labels
+    model.to(DEVICE)
     model.eval()
     with torch.no_grad():
         prob_predicted = model(signals)
@@ -585,10 +621,17 @@ def run_classification_model(signal: np.ndarray, model, classes: List[str], freq
     return labels
 
 
+def calculate_f1_score(y_pred, y_true, average="macro", threshold=CLASSIFICATION_THRESHOLD):
+    y_true = y_true.detach().cpu().numpy().astype(int)
+    y_pred = y_pred.detach().cpu().numpy()
+    y_pred = (y_pred > threshold).astype(int)
+    f1 = f1_score(y_true, y_pred, average=average)
+    return f1
+    
+    
 class ClassificationDataset(Dataset):
-    def __init__(self, data_folder, device, records_to_use=None):
+    def __init__(self, data_folder, records_to_use=None):
         self.data_folder = data_folder
-        self.device = device
         self.records_to_use = records_to_use
         if self.records_to_use:
             self.records = self.records_to_use
@@ -604,7 +647,6 @@ class ClassificationDataset(Dataset):
         self.target_size = [256, 256]
         self.transform = transforms.Compose([
             transforms.Resize(self.target_size),
-            transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
 
@@ -619,25 +661,31 @@ class ClassificationDataset(Dataset):
         # Prepare signals
         signal = self.signals[idx]
         if self.spectrograms:
+            transform = None
+            transform = transforms.Compose([
+                transforms.Resize(self.target_size),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            ])
             signal_standardized = standardise_signal(signal, self.median_freq, 10, 1, True)
             spectrogram = convert_to_spectrogram(signal_standardized, self.median_freq, n_fft=self.n_fft, hop_length=self.hop_length, n_mels=self.n_mels)
-            if self.transform:
-                signals = self.transform(spectrogram)
+            spectrogram = torch.tensor(spectrogram)
             if self.nc == 3:
-                if signals.shape[0] == 1:
-                    signals = torch.cat([signals, signals, signals], dim=0)
+                if spectrogram.shape[0] == 1:
+                    spectrogram = torch.cat([spectrogram, spectrogram, spectrogram], dim=0)
             if self.nc == 1:
-                if signals.shape[0] == 3:
-                    signals = signals[0, :, :]
+                if spectrogram.shape[0] == 3:
+                    spectrogram = spectrogram[0, :, :]
+            if transform:
+                signals = transform(spectrogram)
         else:
             signal_standardized = standardise_signal(signal, self.median_freq, 2.5, 11, False)
             signals = torch.tensor(signal_standardized)
             signals = nn.functional.normalize(signals)
         
         # Convert
-        signals = signals.to(torch.float32).to(self.device)
-        labels = torch.tensor(label).to(torch.float32).to(self.device)
-        return signals, labels
+        signals = signals.to(torch.float32)
+        labels = torch.tensor(label).to(torch.float32)
+        return {"image": signals, "label": labels}
 
 
 def get_model_own(model_name, num_classes, image_based=True, input_shape=None):
@@ -648,7 +696,7 @@ def get_model_own(model_name, num_classes, image_based=True, input_shape=None):
         model = ResNetMultiLabel(model)
     else:
         model = SimpleNN(input_shape, num_classes)
-    return model.to(DEVICE)
+    return model
 
 
 class ResNetMultiLabel(nn.Module):
@@ -672,13 +720,14 @@ class SimpleNN(nn.Module):
         # Define the layers of the network
         self.fc1 = nn.Linear(self.input_features, 512)  # First fully connected layer
         self.fc2 = nn.Linear(512, 256)  # Second fully connected layer
-        self.fc3 = nn.Linear(256, num_classes)  # Output layer
+        self.fc3 = nn.Linear(256, 256)  # Third fully connected layer
+        self.fclast = nn.Linear(256, num_classes)  # Output layer
         
     def forward(self, x):
         x = x.view(-1, self.input_features)  # Flatten the input tensor
         x = torch.relu(self.fc1(x))  # Apply ReLU activation function
         x = torch.relu(self.fc2(x))  # Apply ReLU activation function
-        x = self.fc3(x)  # Output layer
+        x = self.fclast(x)  # Output layer
         x = torch.sigmoid(x)  # Apply sigmoid activation function
         return x
 
@@ -1557,9 +1606,8 @@ class Trainer:
     num_epochs: int
     device: torch.device
     criterion: Optional[torch.nn.Module] = None
-    metrics: List[Callable] = field(
-        default_factory=list
-    )  # Use default_factory to create a new list for each instance to avoid shared state
+    metrics: List[Callable] = field(default_factory=list)
+    use_default_metric: bool = True
     verbose: bool = True
     use_best_model: bool = True
     metric_index: int = 0
@@ -1600,11 +1648,15 @@ class Trainer:
             self.use_best_model = False
         else:
             if self.metrics == []:
-                if self.verbose and (self.rank == 0 or not self.run_in_parallel):
-                    print(
-                        "No metrics provided. The last model epoch will be used since comparison is not possible."
-                    )
-                self.use_best_model = False
+                if self.use_default_metric:
+                    print("Using default metric: F1 score")
+                    self.metrics = [calculate_f1_score]
+                else:
+                    if self.verbose and (self.rank == 0 or not self.run_in_parallel):
+                        print(
+                            "No metrics provided. The last model epoch will be used since comparison is not possible."
+                        )
+                    self.use_best_model = False
 
     def fit(self, training_dataloader: DataLoader, vali_dataloader: DataLoader):
         # Prep training
@@ -1614,8 +1666,8 @@ class Trainer:
             "train": len(training_dataloader.dataset),
             "val": len(vali_dataloader.dataset),
         }
-        last_checkpoint_path = os.path.join(self.model_dir, "last_checkpoint.pt")
-        best_checkpoint_path = os.path.join(self.model_dir, "best_checkpoint.pt")
+        last_checkpoint_path = os.path.join(self.model_dir, "last_checkpoint.pth")
+        best_checkpoint_path = os.path.join(self.model_dir, "best_checkpoin.pth")
         log_path = os.path.join(self.model_dir, "log.txt")
         if self.continue_training:
             checkpoint_dict = torch.load(last_checkpoint_path)
@@ -1634,6 +1686,8 @@ class Trainer:
             self.best_value = -99999.9
             self.best_epoch = 0
             start_epoch = 0
+            
+        self.model = self.model.to(self.device)
 
         if self.verbose and (self.rank == 0 or not self.run_in_parallel):
             if self.criterion is None:
@@ -1677,7 +1731,7 @@ class Trainer:
                 else False,
             )
             train_time = (time.time() - epoch_start_time) / 60
-            if self.criterion is None:
+            if self.criterion is None or not self.use_best_model:
                 vali_loss = 0.0
                 vali_metrics = [0.0] * len(self.metrics)
             else:
@@ -1687,7 +1741,7 @@ class Trainer:
                     self.target_transform,
                     self.criterion,
                     self.metrics,
-                    self.dataloarders,
+                    self.dataloarders["val"],
                     self.device,
                 )
             vali_time = ((time.time() - epoch_start_time) / 60) - train_time
@@ -1695,11 +1749,11 @@ class Trainer:
 
             # Evaluate
             epoch_train_loss = train_loss / self.dataset_sizes["train"]
-            epoch_vali_loss = vali_loss / self.dataset_sizes
+            epoch_vali_loss = vali_loss / self.dataset_sizes["val"]
             epoch_train_metrics = [
                 m / self.dataset_sizes["train"] for m in train_metrics
             ]
-            epoch_vali_metrics = [m / self.dataset_sizes for m in vali_metrics]
+            epoch_vali_metrics = [m / self.dataset_sizes["val"] for m in vali_metrics]
             if self.verbose and (self.rank == 0 or not self.run_in_parallel):
                 train_metrics_str = " ".join(
                     [
@@ -1791,7 +1845,7 @@ class Trainer:
                 inputs = inputs_transform(batch_dict["image"], model, device)
 
             if target_transform is None:
-                raise ValueError("No target transform provided.")
+                targets = batch_dict["label"].to(device)
             else:
                 targets = target_transform(batch_dict, model, device)
 
@@ -1840,7 +1894,7 @@ class Trainer:
                     inputs = inputs_transform(batch_dict["image"], model, device)
 
                 if target_transform is None:
-                    raise ValueError("No target transform provided.")
+                    targets = batch_dict["label"].to(device)
                 else:
                     targets = target_transform(batch_dict, model, device)
 
