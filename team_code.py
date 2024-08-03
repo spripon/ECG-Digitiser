@@ -109,6 +109,7 @@ SEED = 42
 DO_CLASSIFICATION = False
 VALI_SIZE = 0.2
 EPOCHS_CLASSIFICATION = 200
+USE_BEST_MODEL = True
 CLASSIFICATION_THRESHOLD=0.5
 IMAGE_BASED_CLASSIFICATION = False
 USE_SPECTROGRAMS = IMAGE_BASED_CLASSIFICATION
@@ -247,27 +248,20 @@ def train_models(data_folder, model_folder, verbose):
         if verbose:
             print()
             print('Training classification model...')
-        
-        # Get the records
-        records = find_records(data_folder)
-        random.seed(SEED)
-        random.shuffle(records)
-        vali_size = int(len(records) * VALI_SIZE)
-        train_ids = records[vali_size:]
-        vali_ids = records[:vali_size]
-        
+
         # Get datasets and loader
-        train_dataset = ClassificationDataset(data_folder, records_to_use=train_ids)
-        vali_dataset = ClassificationDataset(data_folder, records_to_use=vali_ids)
+        dataset = ClassificationDataset(data_folder)
+        vali_size = int(len(dataset) * VALI_SIZE)
+        train_size = len(dataset) - vali_size
+        train_dataset, vali_dataset = torch.utils.data.random_split(dataset, [train_size, vali_size])
         train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, pin_memory=True)
         vali_loader = DataLoader(vali_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=True)
         
         # Define torch model
-        model_to_use = get_model_own(MODEL_NAME_CLASSIFICATION, len(train_dataset.classes), image_based=IMAGE_BASED_CLASSIFICATION, input_shape=train_dataset[0]['image'].shape[-2:])
+        model_to_use = get_model_own(MODEL_NAME_CLASSIFICATION, len(dataset.classes), image_based=IMAGE_BASED_CLASSIFICATION, input_shape=dataset[0]['image'].shape[-2:])
         criterion = nn.BCEWithLogitsLoss()
         optimizer = torch.optim.Adam(model_to_use.parameters(), lr=0.001)
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=7, gamma=0.1)
-        metrics = [calculate_f1_score]
         classification_model_trainer = Trainer(
             model=model_to_use,
             optimizer=optimizer,
@@ -276,8 +270,7 @@ def train_models(data_folder, model_folder, verbose):
             num_epochs=EPOCHS_CLASSIFICATION,
             device=DEVICE,
             model_dir=model_folder,
-            metrics=metrics,
-            use_best_model=False,
+            use_best_model=USE_BEST_MODEL,
         )
         
         # Train the model
@@ -591,6 +584,11 @@ def run_classification_model(signal: np.ndarray, model, classes: List[str], freq
         
     # Get signals
     if USE_SPECTROGRAMS:
+        transform = None
+        transform = transforms.Compose([
+            transforms.Resize([256, 256]),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
         signal_standardized = standardise_signal(signal, frequency, 10, 1, True)
         spectrogram = convert_to_spectrogram(signal_standardized, frequency, n_fft=32, hop_length=16, n_mels=32)
         spectrogram = torch.tensor(spectrogram)
@@ -600,8 +598,8 @@ def run_classification_model(signal: np.ndarray, model, classes: List[str], freq
         if NC_CLASSIFICATION == 1:
             if spectrogram.shape[0] == 3:
                 spectrogram = spectrogram[0, :, :]
-        if self.transform:
-            signals = self.transform(spectrogram)
+        if transform:
+            signals = transform(spectrogram)
     else:
         signal_standardized = standardise_signal(signal, frequency, 2.5, 11, False)
         signals = torch.tensor(signal_standardized)
@@ -625,7 +623,7 @@ def calculate_f1_score(y_pred, y_true, average="macro", threshold=CLASSIFICATION
     y_true = y_true.detach().cpu().numpy().astype(int)
     y_pred = y_pred.detach().cpu().numpy()
     y_pred = (y_pred > threshold).astype(int)
-    f1 = f1_score(y_true, y_pred, average=average)
+    f1 = f1_score(y_true, y_pred, average=average, zero_division=np.nan)
     return f1
     
     
@@ -661,11 +659,6 @@ class ClassificationDataset(Dataset):
         # Prepare signals
         signal = self.signals[idx]
         if self.spectrograms:
-            transform = None
-            transform = transforms.Compose([
-                transforms.Resize(self.target_size),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-            ])
             signal_standardized = standardise_signal(signal, self.median_freq, 10, 1, True)
             spectrogram = convert_to_spectrogram(signal_standardized, self.median_freq, n_fft=self.n_fft, hop_length=self.hop_length, n_mels=self.n_mels)
             spectrogram = torch.tensor(spectrogram)
@@ -675,8 +668,8 @@ class ClassificationDataset(Dataset):
             if self.nc == 1:
                 if spectrogram.shape[0] == 3:
                     spectrogram = spectrogram[0, :, :]
-            if transform:
-                signals = transform(spectrogram)
+            if self.transform:
+                signals = self.transform(spectrogram)
         else:
             signal_standardized = standardise_signal(signal, self.median_freq, 2.5, 11, False)
             signals = torch.tensor(signal_standardized)
@@ -1862,6 +1855,7 @@ class Trainer:
             optimizer.step()
             running_loss += loss.item() * len(inputs)
             input_count += len(inputs)
+            metrics = [calculate_f1_score] # TODO: Fix this, don't define this here.
             metrics = [m(outputs, targets) for m in metrics]
             running_metrics = [r + m for r, m in zip(running_metrics, metrics)]
 
@@ -1913,8 +1907,8 @@ class Trainer:
                         raise ValueError(
                             "No criterion provided and no loss implemented."
                         )
-
                 validation_loss += loss.item() * len(inputs)
+                metrics = [calculate_f1_score] # TODO: Fix this, don't define this here.
                 metrics = [m(outputs, targets) for m in metrics]
                 validation_metric = [r + m for r, m in zip(validation_metrics, metrics)]
 

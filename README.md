@@ -299,7 +299,7 @@ You can train your model(s) by running
 
 For example:
 
-    python train_model.py -d /data/wolf6245/data/ptb-xl/test_train -m model -v
+    python train_model.py -d /data/wolf6245/data/ptb-xl/test_train/20000 -m model -v
 
 where
 
