@@ -373,7 +373,7 @@ def train_models(data_folder, model_folder, verbose):
         print()
         print()
         
-        # # Train model
+        # Train model
         if verbose:
             print('--------- Training nnUNet model... ---------')
         os.environ["nnUNet_raw"] = data_folder
