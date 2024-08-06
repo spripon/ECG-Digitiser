@@ -48,7 +48,6 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.multiprocessing as mp
 import torch.distributed as dist
-import torchmetrics
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
@@ -106,10 +105,10 @@ BATCH_SIZE = 32
 SEED = 42
 
 # Classification settings
-DO_CLASSIFICATION = False
+DO_CLASSIFICATION = True
 VALI_SIZE = 0.2
 EPOCHS_CLASSIFICATION = 200
-USE_BEST_MODEL = True
+USE_BEST_MODEL = False
 CLASSIFICATION_THRESHOLD=0.5
 IMAGE_BASED_CLASSIFICATION = False
 USE_SPECTROGRAMS = IMAGE_BASED_CLASSIFICATION
@@ -279,9 +278,9 @@ def train_models(data_folder, model_folder, verbose):
         
         # Save
         model_dict = {
-            "classes": train_dataset.classes,
+            "classes": dataset.classes,
             "image_based": IMAGE_BASED_CLASSIFICATION,
-            "input_shape": train_dataset[0]['image'].shape[-2:],
+            "input_shape": dataset[0]['image'].shape[-2:],
             "model_state_dict": classification_model.state_dict(),
             "model_name": MODEL_NAME_CLASSIFICATION,
             "image_based": IMAGE_BASED_CLASSIFICATION
@@ -350,7 +349,7 @@ def train_models(data_folder, model_folder, verbose):
         from replot_pixels import resample_pixels_in_dir
         if verbose:
             print('--------- Resampling pixels... ---------')
-        resample_pixels_in_dir(data_folder, 7)
+        resample_pixels_in_dir(data_folder, 5)
         
         # Create train test split
         from create_train_test import get_parser as get_parser_create, run as create_train_test
@@ -611,7 +610,8 @@ def run_classification_model(signal: np.ndarray, model, classes: List[str], freq
     model.to(DEVICE)
     model.eval()
     with torch.no_grad():
-        prob_predicted = model(signals)
+        predicted = model(signals)
+        prob_predicted = torch.sigmoid(predicted)
     
     # Convert the labels
     labels = [classes[i] for i in range(len(classes)) if prob_predicted[0, i] > CLASSIFICATION_THRESHOLD]
@@ -699,7 +699,6 @@ class ResNetMultiLabel(nn.Module):
         
     def forward(self, x):
         x = self.base_model(x)
-        x = torch.sigmoid(x)  # Apply sigmoid activation to the outputs
         return x
 
 
@@ -721,7 +720,6 @@ class SimpleNN(nn.Module):
         x = torch.relu(self.fc1(x))  # Apply ReLU activation function
         x = torch.relu(self.fc2(x))  # Apply ReLU activation function
         x = self.fclast(x)  # Output layer
-        x = torch.sigmoid(x)  # Apply sigmoid activation function
         return x
 
 
@@ -1765,11 +1763,13 @@ class Trainer:
                 print(epoch_str)
 
             # Save the last model and the best value and epoch
+            save_best = False
             if (self.use_best_model) and (
                 epoch_vali_metrics[self.metric_index] > self.best_value
             ):
                 self.best_value = epoch_vali_metrics[self.metric_index]
                 self.best_epoch = epoch
+                save_best = True
             else:
                 self.best_value = 0.0
                 self.best_epoch = epoch
@@ -1792,9 +1792,7 @@ class Trainer:
                 with open(log_path, "w") as f:
                     for line in log_str:
                         f.write(f"{line}\n")
-            if (self.use_best_model) and (
-                epoch_vali_metrics[self.metric_index] > self.best_value
-            ):
+            if save_best:
                 if self.verbose and (self.rank == 0 or not self.run_in_parallel):
                     print(f"Saving best checkpoint at epoch {epoch}...")
                 torch.save(checkpoint_dict, best_checkpoint_path)
