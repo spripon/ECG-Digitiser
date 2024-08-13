@@ -48,7 +48,6 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.multiprocessing as mp
 import torch.distributed as dist
-import torchmetrics
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.distributed import DistributedSampler
@@ -222,8 +221,10 @@ SIGNAL_START = {
 
 # nnUNet settings
 NNUNET_RAW = f"{os.getcwd()}/data/ptb-xl"
-NNUNET_PREPROCESSED = f"{os.getcwd()}/model/nnUNet_preprocessed"
-NNUNET_RESULTS = f"{os.getcwd()}/model/nnUNet_results"
+NNUNET_PREPROCESSED_TRAIN = f"{os.getcwd()}/model/nnUNet_preprocessed"
+NNUNET_RESULTS_TRAIN = f"{os.getcwd()}/model/nnUNet_results"
+NNUNET_PREPROCESSED_USE = f"{os.getcwd()}/model/M1/nnUNet_preprocessed"
+NNUNET_RESULTS_USE = f"{os.getcwd()}/model/M1/nnUNet_results"
 
 # TODO: Train on float rotated images
 # TODO: Lead boxes: Do we need separate models for lead and lead name? Should we use one box per line?
@@ -286,9 +287,9 @@ def train_models(data_folder, model_folder, verbose):
         
         # Save
         model_dict = {
-            "classes": train_dataset.classes,
+            "classes": dataset.classes,
             "image_based": IMAGE_BASED_CLASSIFICATION,
-            "input_shape": train_dataset[0]['image'].shape[-2:],
+            "input_shape": dataset[0]['image'].shape[-2:],
             "model_state_dict": classification_model.state_dict(),
             "model_name": MODEL_NAME_CLASSIFICATION,
             "image_based": IMAGE_BASED_CLASSIFICATION
@@ -357,7 +358,7 @@ def train_models(data_folder, model_folder, verbose):
         from replot_pixels import resample_pixels_in_dir
         if verbose:
             print('--------- Resampling pixels... ---------')
-        resample_pixels_in_dir(data_folder, 7)
+        resample_pixels_in_dir(data_folder, 5)
         
         # Create train test split
         from create_train_test import get_parser as get_parser_create, run as create_train_test
@@ -384,8 +385,8 @@ def train_models(data_folder, model_folder, verbose):
         if verbose:
             print('--------- Training nnUNet model... ---------')
         os.environ["nnUNet_raw"] = data_folder
-        os.environ["nnUNet_preprocessed"] = NNUNET_PREPROCESSED
-        os.environ["nnUNet_results"] = NNUNET_RESULTS
+        os.environ["nnUNet_preprocessed"] = NNUNET_PREPROCESSED_TRAIN
+        os.environ["nnUNet_results"] = NNUNET_RESULTS_TRAIN
         command_run_preprocess = "nnUNetv2_plan_and_preprocess -d 500 --clean -c 2d --verify_dataset_integrity"
         command_run_train = "nnUNetv2_train 500 2d all -device cuda --c"
         subprocess.run(command_run_preprocess, shell=True)
@@ -618,7 +619,8 @@ def run_classification_model(signal: np.ndarray, model, classes: List[str], freq
     model.to(DEVICE)
     model.eval()
     with torch.no_grad():
-        prob_predicted = model(signals)
+        predicted = model(signals)
+        prob_predicted = torch.sigmoid(predicted)
     
     # Convert the labels
     labels = [classes[i] for i in range(len(classes)) if prob_predicted[0, i] > CLASSIFICATION_THRESHOLD]
@@ -1695,7 +1697,7 @@ def predict_mask_nnunet(image, dataset_name):
     #mask_path_temp = os.path.join(temp_folder_output_pp, "00000_temp.png")
 
     # Define run commands
-    command_run = f"nnUNetv2_predict -d {dataset_name} -i {temp_folder_input} -o {temp_folder_output} -f  all -tr nnUNetTrainer -c 2d -p nnUNetPlans"
+    command_run = f"nnUNetv2_predict -d {dataset_name} -i {temp_folder_input} -o {temp_folder_output} -f 0 -tr nnUNetTrainer -c 2d -p nnUNetPlans"
     command_post_process = f"nnUNetv2_apply_postprocessing -i {temp_folder_output} -o {temp_folder_output_pp} -pp_pkl_file model/nnUNet_results/{dataset_name}/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/postprocessing.pkl -np 8 -plans_json model/nnUNet_results/{dataset_name}/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/plans.json"
 
     # Create temp folders:
@@ -1705,8 +1707,8 @@ def predict_mask_nnunet(image, dataset_name):
 
     # Set env variabels (nnUNet needs them to be set)
     os.environ["nnUNet_raw"] = NNUNET_RAW
-    os.environ["nnUNet_preprocessed"] = NNUNET_PREPROCESSED
-    os.environ["nnUNet_results"] = NNUNET_RESULTS
+    os.environ["nnUNet_preprocessed"] = NNUNET_PREPROCESSED_USE
+    os.environ["nnUNet_results"] = NNUNET_RESULTS_USE
 
     # Save image
     write_png(image, image_path_temp)
@@ -1934,11 +1936,13 @@ class Trainer:
                 print(epoch_str)
 
             # Save the last model and the best value and epoch
+            save_best = False
             if (self.use_best_model) and (
                 epoch_vali_metrics[self.metric_index] > self.best_value
             ):
                 self.best_value = epoch_vali_metrics[self.metric_index]
                 self.best_epoch = epoch
+                save_best = True
             else:
                 self.best_value = 0.0
                 self.best_epoch = epoch
@@ -1961,9 +1965,7 @@ class Trainer:
                 with open(log_path, "w") as f:
                     for line in log_str:
                         f.write(f"{line}\n")
-            if (self.use_best_model) and (
-                epoch_vali_metrics[self.metric_index] > self.best_value
-            ):
+            if save_best:
                 if self.verbose and (self.rank == 0 or not self.run_in_parallel):
                     print(f"Saving best checkpoint at epoch {epoch}...")
                 torch.save(checkpoint_dict, best_checkpoint_path)
