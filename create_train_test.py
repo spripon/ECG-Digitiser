@@ -91,6 +91,12 @@ def get_parser():
 
 # Function to either copy or move files
 def transfer_file(file_path, target_dir, move):
+    target_path = os.path.join(target_dir, os.path.basename(file_path))
+    
+    # Remove the file if it already exists
+    if os.path.exists(target_path):
+        os.remove(target_path)
+    
     if move:
         shutil.move(file_path, target_dir)
     else:
@@ -99,7 +105,7 @@ def transfer_file(file_path, target_dir, move):
 
 # Run transfer in parallel
 def parallel_transfer_files(source_paths, target_dir, move=False, num_workers=-1):
-    if num_workers == -1:
+    if (num_workers == -1) or (num_workers > os.cpu_count()):
         workers = os.cpu_count() - 2
     else:
         workers = num_workers

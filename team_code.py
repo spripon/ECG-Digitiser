@@ -390,6 +390,7 @@ def train_models(data_folder, model_folder, verbose):
             'plotted_pixels_key': "dense_plotted_pixels",
             "no_split": True,
             "move": True,
+            "num_workers": 10
         }
         if verbose:
             print('--------- Creating train test split... ---------')
