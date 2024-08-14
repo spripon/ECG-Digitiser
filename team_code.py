@@ -86,8 +86,6 @@ from hall_set import HallSet
 # Settings
 #
 ################################################################################
-# Root folder
-
 # Device settings
 DEVICE = torch.device(
     "cuda"
