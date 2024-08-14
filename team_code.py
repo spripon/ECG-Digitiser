@@ -72,8 +72,13 @@ from torchvision.ops import box_iou, generalized_box_iou_loss
 from torch.nn.functional import cross_entropy
 import torch.nn.functional as F
 
+# Log Neural CDE
+import torchdiffeq
+import roughpy
+
 # Own methods
 from helper_code import *
+from hall_set import HallSet
 
 
 ################################################################################
@@ -81,9 +86,6 @@ from helper_code import *
 # Settings
 #
 ################################################################################
-# Root folder
-ROOT = "/data/wolf6245"
-
 # Device settings
 DEVICE = torch.device(
     "cuda"
@@ -108,15 +110,17 @@ SEED = 42
 DO_CLASSIFICATION = True
 VALI_SIZE = 0.2
 EPOCHS_CLASSIFICATION = 200
-USE_BEST_MODEL = False
-CLASSIFICATION_THRESHOLD=0.5
+USE_BEST_MODEL = True
+CLASSIFICATION_THRESHOLD = 0.5
 IMAGE_BASED_CLASSIFICATION = False
 USE_SPECTROGRAMS = IMAGE_BASED_CLASSIFICATION
-MODEL_NAME_CLASSIFICATION = "resnet50"
+MODEL_NAME_CLASSIFICATION = "LogNCDE"
+DEPTH = 2
+STEPSIZE = 10
 NC_CLASSIFICATION = 3
 
 # General digitization settings
-TRAIN_NNUNET = True
+TRAIN_NNUNET = False
 X_FREQUENCY = 500
 NC = 3
 IMG_SIZE = (50, 500)
@@ -251,7 +255,7 @@ def train_models(data_folder, model_folder, verbose):
             print('Training classification model...')
 
         # Get datasets and loader
-        dataset = ClassificationDataset(data_folder)
+        dataset = SignatureDataset(data_folder, stepsize=STEPSIZE, depth=DEPTH)
         vali_size = int(len(dataset) * VALI_SIZE)
         train_size = len(dataset) - vali_size
         train_dataset, vali_dataset = torch.utils.data.random_split(dataset, [train_size, vali_size])
@@ -259,9 +263,9 @@ def train_models(data_folder, model_folder, verbose):
         vali_loader = DataLoader(vali_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=True)
         
         # Define torch model
-        model_to_use = get_model_own(MODEL_NAME_CLASSIFICATION, len(dataset.classes), image_based=IMAGE_BASED_CLASSIFICATION, input_shape=dataset[0]['image'].shape[-2:])
+        model_to_use = get_model_own(MODEL_NAME_CLASSIFICATION, len(dataset.classes), image_based=IMAGE_BASED_CLASSIFICATION, input_shape=dataset[0]['x0'].shape)
         criterion = nn.BCEWithLogitsLoss()
-        optimizer = torch.optim.Adam(model_to_use.parameters(), lr=0.001)
+        optimizer = torch.optim.Adam(model_to_use.parameters(), lr=3e-4)
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=7, gamma=0.1)
         classification_model_trainer = Trainer(
             model=model_to_use,
@@ -623,10 +627,61 @@ def run_classification_model(signal: np.ndarray, model, classes: List[str], freq
 
 def calculate_f1_score(y_pred, y_true, average="macro", threshold=CLASSIFICATION_THRESHOLD):
     y_true = y_true.detach().cpu().numpy().astype(int)
-    y_pred = y_pred.detach().cpu().numpy()
+    y_pred = torch.sigmoid(y_pred).detach().cpu().numpy()
     y_pred = (y_pred > threshold).astype(int)
     f1 = f1_score(y_true, y_pred, average=average, zero_division=np.nan)
     return f1
+
+
+class SignatureDataset(Dataset):
+    def __init__(self, data_folder, stepsize, depth, records_to_use=None):
+        self.data_folder = data_folder
+        self.records_to_use = records_to_use
+        if self.records_to_use:
+            self.records = self.records_to_use
+        else:
+            self.records = find_records(data_folder)
+        signals, self.labels, self.classes, sampling_frequencies = get_signals(self.records, self.data_folder)
+        self.length = signals.shape[1]
+        self.stepsize = stepsize
+        self.depth = depth
+
+        if self.depth == 1:
+            CTX = roughpy.get_context(width=signals.shape[-1], depth=1, coeffs=roughpy.DPReal)
+        else:
+            CTX = roughpy.get_context(width=signals.shape[-1], depth=2, coeffs=roughpy.DPReal)
+
+        streams = [roughpy.LieIncrementStream.from_increments(np.diff(x, axis=0), ctx=CTX) for x in signals]
+        
+        all_logsigs = []
+        for stream in streams:
+            logsigs = []
+            for i in range(0, self.length, self.stepsize):
+                logsigs.append(np.array(stream.log_signature(i, i + self.stepsize)))
+            logsigs = np.stack(logsigs)
+            all_logsigs.append(logsigs)
+        all_logsigs = np.stack(all_logsigs)
+        self.all_logsigs = all_logsigs
+        self.x0s = signals[:, 0, :]
+        self.length = signals.shape[1]
+
+    def __len__(self):
+        return len(self.all_logsigs)
+
+    def __getitem__(self, idx):
+        
+        # Get labels
+        label = self.labels[idx]
+        
+        # Prepare signals
+        logsigs = self.all_logsigs[idx]
+
+        x0 = self.x0s[idx]
+        
+        logsigs = torch.tensor(logsigs).to(torch.float32)
+        x0 = torch.tensor(x0).to(torch.float32)
+        labels = torch.tensor(label).to(torch.float32)
+        return {"logsigs": logsigs, "x0": x0, "label": labels}
     
     
 class ClassificationDataset(Dataset):
@@ -689,6 +744,14 @@ def get_model_own(model_name, num_classes, image_based=True, input_shape=None):
         num_ftrs = model.fc.in_features
         model.fc = nn.Linear(num_ftrs, num_classes)
         model = ResNetMultiLabel(model)
+    elif model_name == "LogNCDE":
+        hidden_dim = 16
+        data_dim = input_shape[0]
+        label_dim = num_classes
+        vf_hidden_dim = 128
+        vf_num_hidden = 3
+        ode_solver_stepsize = 0.002
+        model = LogNeuralCDE(hidden_dim, data_dim, label_dim, vf_hidden_dim, vf_num_hidden, ode_solver_stepsize, STEPSIZE, DEPTH)
     else:
         model = SimpleNN(input_shape, num_classes)
     return model
@@ -723,6 +786,111 @@ class SimpleNN(nn.Module):
         x = torch.relu(self.fc2(x))  # Apply ReLU activation function
         x = self.fclast(x)  # Output layer
         return x
+
+
+class MLP(nn.Module):
+    def __init__(self, in_size, out_size, width, depth, final_activation=nn.Tanh):
+        super(MLP, self).__init__()
+        layers = []
+        layers.append(nn.Linear(in_size, width))
+        layers.append(nn.SiLU())
+        for _ in range(depth - 1):
+            layers.append(nn.Linear(width, width))
+            layers.append(nn.SiLU())
+        layers.append(nn.Linear(width, out_size))
+        self.network = nn.Sequential(*layers)
+        self.final_activation = final_activation()
+
+    def forward(self, x):
+        x = self.network(x)
+        return self.final_activation(x)
+
+
+class LogNeuralCDE(nn.Module):
+    def __init__(self, hidden_dim, data_dim, label_dim, vf_hidden_dim, vf_num_hidden, ode_solver_stepsize, stepsize, depth):
+        super(LogNeuralCDE, self).__init__()
+        self.vf = MLP(hidden_dim, hidden_dim * data_dim, vf_hidden_dim, vf_num_hidden)
+        self.linear1 = nn.Linear(data_dim, hidden_dim)
+        self.linear2 = nn.Linear(hidden_dim, label_dim)
+        self.hidden_dim = hidden_dim
+        self.data_dim = data_dim
+        self.ode_solver_stepsize = ode_solver_stepsize
+        self.stepsize = stepsize
+        if depth not in [1, 2]:
+            raise ValueError("The Log-ODE method is only implemented for truncation depths one and two")
+        self.depth = depth
+        self.hall_set = HallSet(data_dim, depth)
+
+    def calc_logsigs(self, X):
+        if self.depth == 1:
+            CTX = roughpy.get_context(width=X.shape[-1], depth=1, coeffs=roughpy.DPReal)
+        else:
+            CTX = roughpy.get_context(width=X.shape[-1], depth=2, coeffs=roughpy.DPReal)
+
+        np_stream = X.cpu().detach().numpy()
+        stream = roughpy.LieIncrementStream.from_increments(np.diff(np_stream, axis=0), ctx=CTX)
+
+        logsigs = []
+        for i in range(0, len(X), self.stepsize):
+            logsigs.append(torch.tensor(np.array(stream.log_signature(i, i + self.stepsize)), dtype=torch.float32))
+        logsigs = torch.stack(logsigs)
+        logsigs = logsigs.to(DEVICE)
+
+        return logsigs
+
+    def depth_one_ode(self, y, logsig, interval_length):
+        vf_out = self.vf(y).view(self.data_dim, self.hidden_dim)
+        return torch.einsum('jk,j->k', vf_out, logsig / interval_length)
+
+    def depth_two_ode(self, y, logsig, interval_length):
+        vf_out = self.vf(y).view(self.data_dim, self.hidden_dim)
+
+        def jvp_func(v):
+            return torch.func.jvp(self.vf, (y,), (v,))[1]
+
+        jvps = torch.vmap(jvp_func)(vf_out)
+        jvps = jvps.reshape(self.data_dim, self.data_dim, self.hidden_dim)
+
+        def liebracket(jvps, pair):
+            return jvps[pair[0] - 1, pair[1] - 1] - jvps[pair[1] - 1, pair[0] - 1]
+
+        pairs = torch.tensor(self.hall_set.data[self.data_dim + 1:], dtype=torch.long)  # Convert pairs to tensor
+        lieout = torch.stack([liebracket(jvps, pair) for pair in pairs], dim=0)  # [num_pairs, hidden_dim]
+
+        vf_depth1 = torch.einsum('jk,j->k', vf_out, logsig[:self.data_dim])  # [hidden_dim,]
+        vf_depth2 = torch.einsum('jk,j->k', lieout, logsig[self.data_dim:])  # [hidden_dim,]
+
+        return (vf_depth1 + vf_depth2) / interval_length.unsqueeze(-1)  # Ensure interval_length has the right shape
+
+    def get_ode(self, logsigs):
+        intervals = torch.arange(0, (logsigs.shape[1] + 1) * self.stepsize, self.stepsize, device=DEVICE) / (logsigs.shape[1] * self.stepsize)
+
+        def func(t, y):
+            idx = torch.searchsorted(intervals, t)
+            if idx == 0:
+                idx = 1
+            logsig_t = logsigs[:, idx - 1]
+            interval_length = intervals[idx] - intervals[idx - 1]
+            if self.depth == 1:
+                return torch.vmap(self.depth_one_ode, in_dims=(0, 0, None))(y, logsig_t, interval_length)
+            if self.depth == 2:
+                return torch.vmap(self.depth_two_ode, in_dims=(0, 0, None))(y, logsig_t, interval_length)
+
+        return func
+
+    def forward(self, X):
+        logsigs, x0 = X
+        ts = torch.linspace(0, 1, 2, device=DEVICE)
+        func = self.get_ode(logsigs)
+
+        h0 = self.linear1(x0)
+
+        solution = torchdiffeq.odeint(
+            func, h0, ts, method='euler', options={'step_size': self.ode_solver_stepsize}
+        )
+
+        return self.linear2(solution[-1])
+
 
 
 ################################################################################
@@ -1833,7 +2001,8 @@ class Trainer:
 
         for i, batch_dict in enumerate(dataloader):
             if inputs_transform is None:
-                inputs = batch_dict["image"].to(device)
+                inputs = (batch_dict["logsigs"].to(device), batch_dict["x0"].to(device))
+
             else:
                 inputs = inputs_transform(batch_dict["image"], model, device)
 
@@ -1853,10 +2022,10 @@ class Trainer:
 
             loss.backward()
             optimizer.step()
-            running_loss += loss.item() * len(inputs)
-            input_count += len(inputs)
+            running_loss += loss.item() * len(inputs[0])
+            input_count += len(inputs[0])
             metrics = [calculate_f1_score] # TODO: Fix this, don't define this here.
-            metrics = [m(outputs, targets) for m in metrics]
+            metrics = [m(outputs, targets) * len(inputs[0]) for m in metrics]
             running_metrics = [r + m for r, m in zip(running_metrics, metrics)]
 
             if verbose and i % print_freq == 0:
@@ -1883,7 +2052,7 @@ class Trainer:
         with torch.no_grad():
             for i, batch_dict in enumerate(dataloader):
                 if inputs_transform is None:
-                    inputs = batch_dict["image"].to(device)
+                    inputs = (batch_dict["logsigs"].to(device), batch_dict["x0"].to(device))
                 else:
                     inputs = inputs_transform(batch_dict["image"], model, device)
 
@@ -1907,12 +2076,12 @@ class Trainer:
                         raise ValueError(
                             "No criterion provided and no loss implemented."
                         )
-                validation_loss += loss.item() * len(inputs)
+                validation_loss += loss.item() * len(inputs[0])
                 metrics = [calculate_f1_score] # TODO: Fix this, don't define this here.
-                metrics = [m(outputs, targets) for m in metrics]
-                validation_metric = [r + m for r, m in zip(validation_metrics, metrics)]
+                metrics = [m(outputs, targets) * len(inputs[0]) for m in metrics]
+                validation_metrics = [r + m for r, m in zip(validation_metrics, metrics)]
 
-        return validation_loss, validation_metric
+        return validation_loss, validation_metrics
 
     @staticmethod
     def FasterRCNN_loss(outputs, targets):
