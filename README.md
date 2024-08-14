@@ -44,7 +44,7 @@ At the moment, it does the following:
     At the moment, the official nnU-Net repository contains a bug and is not working with RGB png images. Please use the following installation instructions for now:
 
         cd nnUNet
-        pip install -e .
+        pip install .
 
     To also use nnSAM, run the following after:
 
@@ -299,7 +299,7 @@ You can train your model(s) by running
 
 For example:
 
-    python train_model.py -d /data/wolf6245/data/ptb-xl/test_train/20000 -m model -v
+    python train_model.py -d /data/wolf6245/data/ptb-xl/test_train/20000_small -m model -v
 
 where
 

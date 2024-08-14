@@ -27,3 +27,6 @@ tensorflow==2.14.0
 validators==0.18.2
 html5lib==1.1
 pyyaml
+
+torchdiffeq==0.2.4
+roughpy==0.1.1

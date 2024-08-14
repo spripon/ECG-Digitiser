@@ -103,24 +103,26 @@ else:
     WORLD_SIZE = 1
 
 # General settings
-BATCH_SIZE = 32
+BATCH_SIZE = 16
 SEED = 42
 
 # Classification settings
 DO_CLASSIFICATION = True
 VALI_SIZE = 0.2
-EPOCHS_CLASSIFICATION = 200
+EPOCHS_CLASSIFICATION = 100
 USE_BEST_MODEL = True
 CLASSIFICATION_THRESHOLD = 0.5
-IMAGE_BASED_CLASSIFICATION = False
+IMAGE_BASED_CLASSIFICATION = True
 USE_SPECTROGRAMS = IMAGE_BASED_CLASSIFICATION
-MODEL_NAME_CLASSIFICATION = "LogNCDE"
+MODEL_NAME_CLASSIFICATION = "resnet50" # LogNCDE
 DEPTH = 2
-STEPSIZE = 10
+STEPSIZE = 5
+INCLUDE_TIME = True
 NC_CLASSIFICATION = 3
 
 # General digitization settings
-TRAIN_NNUNET = False
+TRAIN_NNUNET = True
+MAX_NUM_IMAGES = -1
 X_FREQUENCY = 500
 NC = 3
 IMG_SIZE = (50, 500)
@@ -217,11 +219,13 @@ SIGNAL_START = {
 }
 
 # nnUNet settings
+TRAIN_FOLDER = f"{os.getcwd()}/data/nnUNet"
+PATH_TO_CHECKPOINT = f"{os.getcwd()}/model/M1/nnUNet_results/Dataset500_Signals/nnUNetTrainer__nnUNetPlans__2d/fold_0/checkpoint_final.pth"
 NNUNET_RAW = f"{os.getcwd()}/data/ptb-xl"
 NNUNET_PREPROCESSED_TRAIN = f"{os.getcwd()}/model/nnUNet_preprocessed"
 NNUNET_RESULTS_TRAIN = f"{os.getcwd()}/model/nnUNet_results"
-NNUNET_PREPROCESSED_USE = f"{os.getcwd()}/model/M1/nnUNet_preprocessed"
-NNUNET_RESULTS_USE = f"{os.getcwd()}/model/M1/nnUNet_results"
+NNUNET_PREPROCESSED_USE = NNUNET_PREPROCESSED_TRAIN # f"{os.getcwd()}/model/M1/nnUNet_preprocessed"
+NNUNET_RESULTS_USE = NNUNET_RESULTS_TRAIN # f"{os.getcwd()}/model/M1/nnUNet_results"
 
 # TODO: Train on float rotated images
 # TODO: Lead boxes: Do we need separate models for lead and lead name? Should we use one box per line?
@@ -255,7 +259,12 @@ def train_models(data_folder, model_folder, verbose):
             print('Training classification model...')
 
         # Get datasets and loader
-        dataset = SignatureDataset(data_folder, stepsize=STEPSIZE, depth=DEPTH)
+        if verbose:
+            print('  Loading dataset...')
+        if MODEL_NAME_CLASSIFICATION == "LogNCDE":
+            dataset = SignatureDataset(data_folder, include_time=INCLUDE_TIME, stepsize=STEPSIZE, depth=DEPTH)
+        else:
+            dataset = ClassificationDataset(data_folder)
         vali_size = int(len(dataset) * VALI_SIZE)
         train_size = len(dataset) - vali_size
         train_dataset, vali_dataset = torch.utils.data.random_split(dataset, [train_size, vali_size])
@@ -263,7 +272,13 @@ def train_models(data_folder, model_folder, verbose):
         vali_loader = DataLoader(vali_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=True)
         
         # Define torch model
-        model_to_use = get_model_own(MODEL_NAME_CLASSIFICATION, len(dataset.classes), image_based=IMAGE_BASED_CLASSIFICATION, input_shape=dataset[0]['x0'].shape)
+        if verbose:
+            print('  Defining model...')
+        if MODEL_NAME_CLASSIFICATION == "LogNCDE":
+            input_shape = dataset[0]['x0'].shape
+        else:
+            input_shape = dataset[0]['image'].shape[-2:]
+        model_to_use = get_model_own(MODEL_NAME_CLASSIFICATION, len(dataset.classes), image_based=IMAGE_BASED_CLASSIFICATION, input_shape=input_shape)
         criterion = nn.BCEWithLogitsLoss()
         optimizer = torch.optim.Adam(model_to_use.parameters(), lr=3e-4)
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=7, gamma=0.1)
@@ -279,6 +294,8 @@ def train_models(data_folder, model_folder, verbose):
         )
         
         # Train the model
+        if verbose:
+            print('  Training model...')
         os.makedirs(model_folder, exist_ok=True)
         classification_model = classification_model_trainer.fit(train_loader, vali_loader)
         
@@ -318,9 +335,10 @@ def train_models(data_folder, model_folder, verbose):
         
         # Generate images and json files
         from gen_ecg_images_from_data_batch import get_parser as get_parser_gen, run as gen_ecg_images_from_data_batch
+        os.makedirs(TRAIN_FOLDER, exist_ok=True)
         args_dict = {
             'input_directory': data_folder,
-            'output_directory': data_folder,
+            'output_directory': TRAIN_FOLDER,
             'seed': 10,
             'mask_unplotted_samples': True,
             'print_header': True,
@@ -334,6 +352,7 @@ def train_models(data_folder, model_folder, verbose):
             'rotate': 5,
             'num_images_per_ecg': 1,
             'overwrite': True,
+            'max_num_images': MAX_NUM_IMAGES,
         }
         args = get_parser_gen().parse_args(convert_dict_to_args(args_dict))
         if verbose:
@@ -344,8 +363,8 @@ def train_models(data_folder, model_folder, verbose):
         # Prepare images
         from prepare_image_data import get_parser as get_parser_prep, run as prepare_image_data
         args_dict = {
-            'input_folder': data_folder,
-            'output_folder': data_folder,
+            'input_folder': TRAIN_FOLDER,
+            'output_folder': TRAIN_FOLDER,
         }
         if verbose:
             print('--------- Preparing images... ---------')
@@ -355,13 +374,13 @@ def train_models(data_folder, model_folder, verbose):
         from replot_pixels import resample_pixels_in_dir
         if verbose:
             print('--------- Resampling pixels... ---------')
-        resample_pixels_in_dir(data_folder, 5)
+        resample_pixels_in_dir(TRAIN_FOLDER, 5)
         
         # Create train test split
         from create_train_test import get_parser as get_parser_create, run as create_train_test
         args_dict = {
-            'input_data': data_folder,
-            'output_folder': os.path.join(data_folder, 'Dataset500_Signals'),
+            'input_data': TRAIN_FOLDER,
+            'output_folder': os.path.join(TRAIN_FOLDER, 'Dataset500_Signals'),
             'database_file': 'ptbxl_database.csv',
             'rgba_to_rgb': True,
             'gray_to_rgb': True,
@@ -381,11 +400,11 @@ def train_models(data_folder, model_folder, verbose):
         # Train model
         if verbose:
             print('--------- Training nnUNet model... ---------')
-        os.environ["nnUNet_raw"] = data_folder
+        os.environ["nnUNet_raw"] = TRAIN_FOLDER
         os.environ["nnUNet_preprocessed"] = NNUNET_PREPROCESSED_TRAIN
         os.environ["nnUNet_results"] = NNUNET_RESULTS_TRAIN
         command_run_preprocess = "nnUNetv2_plan_and_preprocess -d 500 --clean -c 2d --verify_dataset_integrity"
-        command_run_train = "nnUNetv2_train 500 2d all -device cuda --c"
+        command_run_train = f"nnUNetv2_train 500 2d all -device cuda -pretrained_weights {PATH_TO_CHECKPOINT}"
         subprocess.run(command_run_preprocess, shell=True)
         subprocess.run(command_run_train, shell=True)
     
@@ -634,7 +653,7 @@ def calculate_f1_score(y_pred, y_true, average="macro", threshold=CLASSIFICATION
 
 
 class SignatureDataset(Dataset):
-    def __init__(self, data_folder, stepsize, depth, records_to_use=None):
+    def __init__(self, data_folder, include_time, stepsize, depth, records_to_use=None):
         self.data_folder = data_folder
         self.records_to_use = records_to_use
         if self.records_to_use:
@@ -645,6 +664,10 @@ class SignatureDataset(Dataset):
         self.length = signals.shape[1]
         self.stepsize = stepsize
         self.depth = depth
+        if include_time:
+            t = np.linspace(0, 1, self.length).reshape(1, self.length, 1)
+            t = np.tile(t, (len(signals), 1, 1))
+            signals = np.concatenate((t, signals), axis=-1)
 
         if self.depth == 1:
             CTX = roughpy.get_context(width=signals.shape[-1], depth=1, coeffs=roughpy.DPReal)
@@ -738,21 +761,29 @@ class ClassificationDataset(Dataset):
         return {"image": signals, "label": labels}
 
 
-def get_model_own(model_name, num_classes, image_based=True, input_shape=None):
+def get_model_own(model_name, num_classes, image_based=True, input_shape=None, verbose=True):
     if image_based:
-        model = eval(f"models.{model_name}(pretrained=True)")
+        if verbose:
+            print("Using image based model")
+        model = eval(f"models.{model_name}()")
+        state_dict = torch.load("model/pytorch/resnet50-0676ba61.pth")
+        model.load_state_dict(state_dict)
         num_ftrs = model.fc.in_features
         model.fc = nn.Linear(num_ftrs, num_classes)
         model = ResNetMultiLabel(model)
     elif model_name == "LogNCDE":
-        hidden_dim = 16
+        if verbose:
+            print("Using Log-Neural CDE model")
+        hidden_dim = 1024
         data_dim = input_shape[0]
         label_dim = num_classes
-        vf_hidden_dim = 128
-        vf_num_hidden = 3
-        ode_solver_stepsize = 0.002
+        vf_hidden_dim = 1024
+        vf_num_hidden = 2
+        ode_solver_stepsize = 0.001
         model = LogNeuralCDE(hidden_dim, data_dim, label_dim, vf_hidden_dim, vf_num_hidden, ode_solver_stepsize, STEPSIZE, DEPTH)
     else:
+        if verbose:
+            print("Using simple NN model")
         model = SimpleNN(input_shape, num_classes)
     return model
 
@@ -857,10 +888,10 @@ class LogNeuralCDE(nn.Module):
         pairs = torch.tensor(self.hall_set.data[self.data_dim + 1:], dtype=torch.long)  # Convert pairs to tensor
         lieout = torch.stack([liebracket(jvps, pair) for pair in pairs], dim=0)  # [num_pairs, hidden_dim]
 
-        vf_depth1 = torch.einsum('jk,j->k', vf_out, logsig[:self.data_dim])  # [hidden_dim,]
-        vf_depth2 = torch.einsum('jk,j->k', lieout, logsig[self.data_dim:])  # [hidden_dim,]
+        vf_depth1 = torch.einsum('jk,j->k', vf_out, logsig[:self.data_dim] / interval_length)  # [hidden_dim,]
+        vf_depth2 = torch.einsum('jk,j->k', lieout, logsig[self.data_dim:] / interval_length)  # [hidden_dim,]
 
-        return (vf_depth1 + vf_depth2) / interval_length.unsqueeze(-1)  # Ensure interval_length has the right shape
+        return vf_depth1 + vf_depth2
 
     def get_ode(self, logsigs):
         intervals = torch.arange(0, (logsigs.shape[1] + 1) * self.stepsize, self.stepsize, device=DEVICE) / (logsigs.shape[1] * self.stepsize)
@@ -1694,7 +1725,7 @@ def predict_mask_nnunet(image, dataset_name):
     #mask_path_temp = os.path.join(temp_folder_output_pp, "00000_temp.png")
 
     # Define run commands
-    command_run = f"nnUNetv2_predict -d {dataset_name} -i {temp_folder_input} -o {temp_folder_output} -f 0 -tr nnUNetTrainer -c 2d -p nnUNetPlans"
+    command_run = f"nnUNetv2_predict -d {dataset_name} -i {temp_folder_input} -o {temp_folder_output} -f all -tr nnUNetTrainer -c 2d -p nnUNetPlans"
     command_post_process = f"nnUNetv2_apply_postprocessing -i {temp_folder_output} -o {temp_folder_output_pp} -pp_pkl_file model/nnUNet_results/{dataset_name}/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/postprocessing.pkl -np 8 -plans_json model/nnUNet_results/{dataset_name}/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/plans.json"
 
     # Create temp folders:
@@ -1828,7 +1859,7 @@ class Trainer:
             "val": len(vali_dataloader.dataset),
         }
         last_checkpoint_path = os.path.join(self.model_dir, "last_checkpoint.pth")
-        best_checkpoint_path = os.path.join(self.model_dir, "best_checkpoin.pth")
+        best_checkpoint_path = os.path.join(self.model_dir, "best_checkpoint.pth")
         log_path = os.path.join(self.model_dir, "log.txt")
         if self.continue_training:
             checkpoint_dict = torch.load(last_checkpoint_path)
@@ -2001,8 +2032,11 @@ class Trainer:
 
         for i, batch_dict in enumerate(dataloader):
             if inputs_transform is None:
-                inputs = (batch_dict["logsigs"].to(device), batch_dict["x0"].to(device))
-
+                if MODEL_NAME_CLASSIFICATION == "LogNCDE":
+                    inputs = (batch_dict["logsigs"].to(device), batch_dict["x0"].to(device))
+                else:
+                    inputs = batch_dict["image"].to(device)
+                    
             else:
                 inputs = inputs_transform(batch_dict["image"], model, device)
 
@@ -2022,10 +2056,16 @@ class Trainer:
 
             loss.backward()
             optimizer.step()
-            running_loss += loss.item() * len(inputs[0])
-            input_count += len(inputs[0])
-            metrics = [calculate_f1_score] # TODO: Fix this, don't define this here.
-            metrics = [m(outputs, targets) * len(inputs[0]) for m in metrics]
+            if MODEL_NAME_CLASSIFICATION == "LogNCDE":
+                running_loss += loss.item() * len(inputs[0])
+                input_count += len(inputs[0])
+                metrics = [calculate_f1_score] # TODO: Fix this, don't define this here.
+                metrics = [m(outputs, targets) * len(inputs[0]) for m in metrics]
+            else:
+                running_loss += loss.item() * len(inputs)
+                input_count += len(inputs)
+                metrics = [calculate_f1_score] # TODO: Fix this, don't define this here.
+                metrics = [m(outputs, targets) for m in metrics]
             running_metrics = [r + m for r, m in zip(running_metrics, metrics)]
 
             if verbose and i % print_freq == 0:
@@ -2052,7 +2092,10 @@ class Trainer:
         with torch.no_grad():
             for i, batch_dict in enumerate(dataloader):
                 if inputs_transform is None:
-                    inputs = (batch_dict["logsigs"].to(device), batch_dict["x0"].to(device))
+                    if MODEL_NAME_CLASSIFICATION == "LogNCDE":
+                        inputs = (batch_dict["logsigs"].to(device), batch_dict["x0"].to(device))
+                    else:
+                        inputs = batch_dict["image"].to(device)   
                 else:
                     inputs = inputs_transform(batch_dict["image"], model, device)
 
@@ -2076,10 +2119,16 @@ class Trainer:
                         raise ValueError(
                             "No criterion provided and no loss implemented."
                         )
-                validation_loss += loss.item() * len(inputs[0])
-                metrics = [calculate_f1_score] # TODO: Fix this, don't define this here.
-                metrics = [m(outputs, targets) * len(inputs[0]) for m in metrics]
-                validation_metrics = [r + m for r, m in zip(validation_metrics, metrics)]
+                if MODEL_NAME_CLASSIFICATION == "LogNCDE":
+                    validation_loss += loss.item() * len(inputs[0])
+                    metrics = [calculate_f1_score] # TODO: Fix this, don't define this here.
+                    metrics = [m(outputs, targets) * len(inputs[0]) for m in metrics]
+                    validation_metrics = [r + m for r, m in zip(validation_metrics, metrics)]
+                else:
+                    validation_loss += loss.item() * len(inputs)
+                    metrics = [calculate_f1_score] # TODO: Fix this, don't define this here.
+                    metrics = [m(outputs, targets) for m in metrics]
+                    validation_metrics = [r + m for r, m in zip(validation_metrics, metrics)]
 
         return validation_loss, validation_metrics
 
