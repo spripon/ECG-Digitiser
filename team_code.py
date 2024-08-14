@@ -107,12 +107,12 @@ BATCH_SIZE = 16
 SEED = 42
 
 # Classification settings
-DO_CLASSIFICATION = False
+DO_CLASSIFICATION = True
 VALI_SIZE = 0.2
 EPOCHS_CLASSIFICATION = 150
 USE_BEST_MODEL = True
 CLASSIFICATION_THRESHOLD = 0.5
-IMAGE_BASED_CLASSIFICATION = False
+IMAGE_BASED_CLASSIFICATION = True
 USE_SPECTROGRAMS = IMAGE_BASED_CLASSIFICATION
 MODEL_NAME_CLASSIFICATION = "resnet50" # LogNCDE
 DEPTH = 2
@@ -122,7 +122,7 @@ NC_CLASSIFICATION = 3
 
 # General digitization settings
 TRAIN_NNUNET = True
-MAX_NUM_IMAGES = -1
+MAX_NUM_IMAGES = 1000
 X_FREQUENCY = 500
 NC = 3
 IMG_SIZE = (50, 500)
@@ -631,6 +631,9 @@ def run_classification_model(signal: np.ndarray, model, classes: List[str], freq
         signals = nn.functional.normalize(signals)
     
     signals = signals.to(torch.float32).to(DEVICE)
+    
+    # Wrap to batch
+    signals = signals.unsqueeze(0)
     
     # Predict labels
     model.to(DEVICE)
