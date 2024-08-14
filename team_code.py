@@ -122,7 +122,7 @@ NC_CLASSIFICATION = 3
 
 # General digitization settings
 TRAIN_NNUNET = True
-MAX_NUM_IMAGES = 1000
+MAX_NUM_IMAGES = -1
 X_FREQUENCY = 500
 NC = 3
 IMG_SIZE = (50, 500)
