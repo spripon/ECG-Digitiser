@@ -106,7 +106,7 @@ else:
     WORLD_SIZE = 1
 
 # General settings
-BATCH_SIZE = 32
+BATCH_SIZE = 16
 SEED = 42
 
 # Classification settings
@@ -119,7 +119,8 @@ IMAGE_BASED_CLASSIFICATION = False
 USE_SPECTROGRAMS = IMAGE_BASED_CLASSIFICATION
 MODEL_NAME_CLASSIFICATION = "LogNCDE"
 DEPTH = 2
-STEPSIZE = 10
+STEPSIZE = 5
+INCLUDE_TIME = True
 NC_CLASSIFICATION = 3
 
 # General digitization settings
@@ -258,7 +259,7 @@ def train_models(data_folder, model_folder, verbose):
             print('Training classification model...')
 
         # Get datasets and loader
-        dataset = SignatureDataset(data_folder, stepsize=STEPSIZE, depth=DEPTH)
+        dataset = SignatureDataset(data_folder, include_time=INCLUDE_TIME, stepsize=STEPSIZE, depth=DEPTH)
         vali_size = int(len(dataset) * VALI_SIZE)
         train_size = len(dataset) - vali_size
         train_dataset, vali_dataset = torch.utils.data.random_split(dataset, [train_size, vali_size])
@@ -637,7 +638,7 @@ def calculate_f1_score(y_pred, y_true, average="macro", threshold=CLASSIFICATION
 
 
 class SignatureDataset(Dataset):
-    def __init__(self, data_folder, stepsize, depth, records_to_use=None):
+    def __init__(self, data_folder, include_time, stepsize, depth, records_to_use=None):
         self.data_folder = data_folder
         self.records_to_use = records_to_use
         if self.records_to_use:
@@ -648,6 +649,11 @@ class SignatureDataset(Dataset):
         self.length = signals.shape[1]
         self.stepsize = stepsize
         self.depth = depth
+
+        if include_time:
+            t = np.linspace(0, 1, self.length).reshape(1, self.length, 1)
+            t = np.tile(t, (len(signals), 1, 1))
+            signals = np.concatenate((t, signals), axis=-1)
 
         if self.depth == 1:
             CTX = roughpy.get_context(width=signals.shape[-1], depth=1, coeffs=roughpy.DPReal)
@@ -666,7 +672,6 @@ class SignatureDataset(Dataset):
         all_logsigs = np.stack(all_logsigs)
         self.all_logsigs = all_logsigs
         self.x0s = signals[:, 0, :]
-        self.length = signals.shape[1]
 
     def __len__(self):
         return len(self.all_logsigs)
@@ -748,12 +753,12 @@ def get_model_own(model_name, num_classes, image_based=True, input_shape=None):
         model.fc = nn.Linear(num_ftrs, num_classes)
         model = ResNetMultiLabel(model)
     elif model_name == "LogNCDE":
-        hidden_dim = 16
+        hidden_dim = 1024
         data_dim = input_shape[0]
         label_dim = num_classes
-        vf_hidden_dim = 128
-        vf_num_hidden = 3
-        ode_solver_stepsize = 0.002
+        vf_hidden_dim = 1024
+        vf_num_hidden = 2
+        ode_solver_stepsize = 0.001
         model = LogNeuralCDE(hidden_dim, data_dim, label_dim, vf_hidden_dim, vf_num_hidden, ode_solver_stepsize, STEPSIZE, DEPTH)
     else:
         model = SimpleNN(input_shape, num_classes)
@@ -860,10 +865,10 @@ class LogNeuralCDE(nn.Module):
         pairs = torch.tensor(self.hall_set.data[self.data_dim + 1:], dtype=torch.long)  # Convert pairs to tensor
         lieout = torch.stack([liebracket(jvps, pair) for pair in pairs], dim=0)  # [num_pairs, hidden_dim]
 
-        vf_depth1 = torch.einsum('jk,j->k', vf_out, logsig[:self.data_dim])  # [hidden_dim,]
-        vf_depth2 = torch.einsum('jk,j->k', lieout, logsig[self.data_dim:])  # [hidden_dim,]
+        vf_depth1 = torch.einsum('jk,j->k', vf_out, logsig[:self.data_dim] / interval_length)  # [hidden_dim,]
+        vf_depth2 = torch.einsum('jk,j->k', lieout, logsig[self.data_dim:] / interval_length)  # [hidden_dim,]
 
-        return (vf_depth1 + vf_depth2) / interval_length.unsqueeze(-1)  # Ensure interval_length has the right shape
+        return vf_depth1 + vf_depth2
 
     def get_ode(self, logsigs):
         intervals = torch.arange(0, (logsigs.shape[1] + 1) * self.stepsize, self.stepsize, device=DEVICE) / (logsigs.shape[1] * self.stepsize)
