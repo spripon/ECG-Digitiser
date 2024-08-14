@@ -87,7 +87,6 @@ from hall_set import HallSet
 #
 ################################################################################
 # Root folder
-ROOT = ""
 
 # Device settings
 DEVICE = torch.device(
