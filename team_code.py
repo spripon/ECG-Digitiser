@@ -2069,7 +2069,7 @@ class Trainer:
                 running_loss += loss.item() * len(inputs)
                 input_count += len(inputs)
                 metrics = [calculate_f1_score] # TODO: Fix this, don't define this here.
-                metrics = [m(outputs, targets) for m in metrics]
+                metrics = [m(outputs, targets) * len(inputs) for m in metrics]
             running_metrics = [r + m for r, m in zip(running_metrics, metrics)]
 
             if verbose and i % print_freq == 0:
@@ -2131,7 +2131,7 @@ class Trainer:
                 else:
                     validation_loss += loss.item() * len(inputs)
                     metrics = [calculate_f1_score] # TODO: Fix this, don't define this here.
-                    metrics = [m(outputs, targets) for m in metrics]
+                    metrics = [m(outputs, targets) * len(inputs) for m in metrics]
                     validation_metrics = [r + m for r, m in zip(validation_metrics, metrics)]
 
         return validation_loss, validation_metrics
