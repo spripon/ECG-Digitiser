@@ -778,11 +778,11 @@ def get_model_own(model_name, num_classes, image_based=True, input_shape=None, v
     elif model_name == "LogNCDE":
         if verbose:
             print("Using Log-Neural CDE model")
-        hidden_dim = 1024
+        hidden_dim = 128
         data_dim = input_shape[0]
         label_dim = num_classes
-        vf_hidden_dim = 1024
-        vf_num_hidden = 2
+        vf_hidden_dim = 256
+        vf_num_hidden = 3
         ode_solver_stepsize = 0.001
         model = LogNeuralCDE(hidden_dim, data_dim, label_dim, vf_hidden_dim, vf_num_hidden, ode_solver_stepsize, STEPSIZE, DEPTH)
     else:
