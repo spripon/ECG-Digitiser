@@ -109,19 +109,19 @@ SEED = 42
 # Classification settings
 DO_CLASSIFICATION = True
 VALI_SIZE = 0.2
-EPOCHS_CLASSIFICATION = 150
+EPOCHS_CLASSIFICATION = 100
 USE_BEST_MODEL = True
 CLASSIFICATION_THRESHOLD = 0.5
-IMAGE_BASED_CLASSIFICATION = False
+IMAGE_BASED_CLASSIFICATION = True
 USE_SPECTROGRAMS = IMAGE_BASED_CLASSIFICATION
-MODEL_NAME_CLASSIFICATION = "LogNCDE"
+MODEL_NAME_CLASSIFICATION = "resnet50" # "LogNCDE"
 DEPTH = 2
 STEPSIZE = 5
 INCLUDE_TIME = True
 NC_CLASSIFICATION = 3
 
 # General digitization settings
-TRAIN_NNUNET = True
+TRAIN_NNUNET = False
 MAX_NUM_IMAGES = 1000
 X_FREQUENCY = 500
 NC = 3
@@ -224,8 +224,8 @@ PATH_TO_CHECKPOINT = f"{os.getcwd()}/model/M1/nnUNet_results/Dataset500_Signals/
 NNUNET_RAW = f"{os.getcwd()}/data/ptb-xl"
 NNUNET_PREPROCESSED_TRAIN = f"{os.getcwd()}/model/nnUNet_preprocessed"
 NNUNET_RESULTS_TRAIN = f"{os.getcwd()}/model/nnUNet_results"
-NNUNET_PREPROCESSED_USE = NNUNET_PREPROCESSED_TRAIN # f"{os.getcwd()}/model/M1/nnUNet_preprocessed"
-NNUNET_RESULTS_USE = NNUNET_RESULTS_TRAIN # f"{os.getcwd()}/model/M1/nnUNet_results"
+NNUNET_PREPROCESSED_USE = f"{os.getcwd()}/model/M1/nnUNet_preprocessed" # NNUNET_PREPROCESSED_TRAIN
+NNUNET_RESULTS_USE = f"{os.getcwd()}/model/M1/nnUNet_results" # NNUNET_RESULTS_TRAIN
 
 # TODO: Train on float rotated images
 # TODO: Lead boxes: Do we need separate models for lead and lead name? Should we use one box per line?
