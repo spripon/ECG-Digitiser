@@ -112,7 +112,7 @@ VALI_SIZE = 0.2
 EPOCHS_CLASSIFICATION = 100
 USE_BEST_MODEL = True
 CLASSIFICATION_THRESHOLD = 0.5
-IMAGE_BASED_CLASSIFICATION = True
+IMAGE_BASED_CLASSIFICATION = False
 USE_SPECTROGRAMS = IMAGE_BASED_CLASSIFICATION
 MODEL_NAME_CLASSIFICATION = "resnet50" # "LogNCDE"
 DEPTH = 2
@@ -121,8 +121,8 @@ INCLUDE_TIME = True
 NC_CLASSIFICATION = 3
 
 # General digitization settings
-TRAIN_NNUNET = False
-MAX_NUM_IMAGES = 1000
+TRAIN_NNUNET = True
+MAX_NUM_IMAGES = 100
 X_FREQUENCY = 500
 NC = 3
 IMG_SIZE = (50, 500)
@@ -224,8 +224,8 @@ PATH_TO_CHECKPOINT = f"{os.getcwd()}/model/M1/nnUNet_results/Dataset500_Signals/
 NNUNET_RAW = f"{os.getcwd()}/data/ptb-xl"
 NNUNET_PREPROCESSED_TRAIN = f"{os.getcwd()}/model/nnUNet_preprocessed"
 NNUNET_RESULTS_TRAIN = f"{os.getcwd()}/model/nnUNet_results"
-NNUNET_PREPROCESSED_USE = f"{os.getcwd()}/model/M1/nnUNet_preprocessed" # NNUNET_PREPROCESSED_TRAIN
-NNUNET_RESULTS_USE = f"{os.getcwd()}/model/M1/nnUNet_results" # NNUNET_RESULTS_TRAIN
+NNUNET_PREPROCESSED_USE = NNUNET_PREPROCESSED_TRAIN # f"{os.getcwd()}/model/M1/nnUNet_preprocessed" # NNUNET_PREPROCESSED_TRAIN
+NNUNET_RESULTS_USE = NNUNET_RESULTS_TRAIN # f"{os.getcwd()}/model/M1/nnUNet_results" # NNUNET_RESULTS_TRAIN
 
 # TODO: Train on float rotated images
 # TODO: Lead boxes: Do we need separate models for lead and lead name? Should we use one box per line?
@@ -1729,7 +1729,7 @@ def predict_mask_nnunet(image, dataset_name):
     #mask_path_temp = os.path.join(temp_folder_output_pp, "00000_temp.png")
 
     # Define run commands
-    command_run = f"nnUNetv2_predict -d {dataset_name} -i {temp_folder_input} -o {temp_folder_output} -f 0 -tr nnUNetTrainer -c 2d -p nnUNetPlans"
+    command_run = f"nnUNetv2_predict -d {dataset_name} -i {temp_folder_input} -o {temp_folder_output} -f all -tr nnUNetTrainer -c 2d -p nnUNetPlans"
     command_post_process = f"nnUNetv2_apply_postprocessing -i {temp_folder_output} -o {temp_folder_output_pp} -pp_pkl_file model/nnUNet_results/{dataset_name}/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/postprocessing.pkl -np 8 -plans_json model/nnUNet_results/{dataset_name}/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/plans.json"
 
     # Create temp folders:
