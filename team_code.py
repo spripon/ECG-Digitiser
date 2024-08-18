@@ -74,7 +74,7 @@ import torch.nn.functional as F
 
 # Log Neural CDE
 import torchdiffeq
-import roughpy
+#import roughpy
 
 # Own methods
 from helper_code import *
@@ -107,14 +107,15 @@ BATCH_SIZE = 16
 SEED = 42
 
 # Classification settings
-DO_CLASSIFICATION = False
+DO_CLASSIFICATION = True
+MAX_NUM_DATASETS_CLASSIFICATION = 1000
 VALI_SIZE = 0.2
 EPOCHS_CLASSIFICATION = 100
 USE_BEST_MODEL = True
 CLASSIFICATION_THRESHOLD = 0.5
 IMAGE_BASED_CLASSIFICATION = False
 USE_SPECTROGRAMS = IMAGE_BASED_CLASSIFICATION
-MODEL_NAME_CLASSIFICATION = "LogNCDE" # "LogNCDE"
+MODEL_NAME_CLASSIFICATION = "" # "LogNCDE"
 DEPTH = 2
 STEPSIZE = 5
 INCLUDE_TIME = True
@@ -519,11 +520,17 @@ def run_models(record, digitization_model, classification_model, verbose):
 # Classification model
 ################################################################################
 
-def get_signals(records: List[str], data_folder: str) -> Tuple[np.ndarray, np.ndarray, List[str], List[int]]:
+def get_signals(records: List[str], data_folder: str, max_datasets: int = MAX_NUM_DATASETS_CLASSIFICATION, verbose: bool = True) -> Tuple[np.ndarray, np.ndarray, List[str], List[int]]:
     classification_signals = list()
     classification_labels = list()
     sampling_frequencies = list()
-    for record_name in records:
+    
+    if (max_datasets is None) or (max_datasets > len(records)):
+        max_datasets = len(records)
+    if verbose:
+        print(f"Using {max_datasets} datasets from {len(records)} available datasets.")
+    
+    for record_name in records[:max_datasets]:
         record_path = os.path.join(data_folder, record_name)
         signals, fields = load_signals(record_path)
         header = load_header(record_path)
