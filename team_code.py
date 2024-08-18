@@ -73,8 +73,8 @@ from torch.nn.functional import cross_entropy
 import torch.nn.functional as F
 
 # Log Neural CDE
-import torchdiffeq
-import roughpy
+# import torchdiffeq
+# import roughpy
 
 # Own methods
 from helper_code import *
