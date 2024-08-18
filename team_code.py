@@ -74,7 +74,7 @@ import torch.nn.functional as F
 
 # Log Neural CDE
 import torchdiffeq
-#import roughpy
+import roughpy
 
 # Own methods
 from helper_code import *
@@ -115,7 +115,7 @@ USE_BEST_MODEL = True
 CLASSIFICATION_THRESHOLD = 0.5
 IMAGE_BASED_CLASSIFICATION = False
 USE_SPECTROGRAMS = IMAGE_BASED_CLASSIFICATION
-MODEL_NAME_CLASSIFICATION = "" # "LogNCDE"
+MODEL_NAME_CLASSIFICATION = "LogNCDE" # "LogNCDE"
 DEPTH = 2
 STEPSIZE = 5
 INCLUDE_TIME = True
