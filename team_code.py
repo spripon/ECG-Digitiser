@@ -221,12 +221,12 @@ SIGNAL_START = {
 
 # nnUNet settings
 TRAIN_FOLDER = f"{os.getcwd()}/data/nnUNet"
-PATH_TO_CHECKPOINT = f"{os.getcwd()}/model/M1/nnUNet_results/Dataset500_Signals/nnUNetTrainer__nnUNetPlans__2d/fold_0/checkpoint_final.pth"
+PATH_TO_CHECKPOINT = f"{os.getcwd()}/model/M3/nnUNet_results/Dataset500_Signals/nnUNetTrainer__nnUNetPlans__2d/fold_all/checkpoint_final.pth"
 NNUNET_RAW = f"{os.getcwd()}/data/ptb-xl"
 NNUNET_PREPROCESSED_TRAIN = f"{os.getcwd()}/model/nnUNet_preprocessed"
 NNUNET_RESULTS_TRAIN = f"{os.getcwd()}/model/nnUNet_results"
-NNUNET_PREPROCESSED_USE = NNUNET_PREPROCESSED_TRAIN # f"{os.getcwd()}/model/M1/nnUNet_preprocessed" # NNUNET_PREPROCESSED_TRAIN
-NNUNET_RESULTS_USE = NNUNET_RESULTS_TRAIN # f"{os.getcwd()}/model/M1/nnUNet_results" # NNUNET_RESULTS_TRAIN
+NNUNET_PREPROCESSED_USE = NNUNET_PREPROCESSED_TRAIN # f"{os.getcwd()}/model/M3/nnUNet_preprocessed" # NNUNET_PREPROCESSED_TRAIN
+NNUNET_RESULTS_USE = NNUNET_RESULTS_TRAIN # f"{os.getcwd()}/model/M3/nnUNet_results" # NNUNET_RESULTS_TRAIN
 
 # TODO: Train on float rotated images
 # TODO: Lead boxes: Do we need separate models for lead and lead name? Should we use one box per line?
