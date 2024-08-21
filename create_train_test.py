@@ -111,20 +111,13 @@ def parallel_transfer_files(source_paths, target_dir, move=False, num_workers=-1
         workers = num_workers
     print(f"Using {workers}/{os.cpu_count()} workers")
 
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        list(
-            tqdm(
-                executor.map(
-                    transfer_file,
-                    source_paths,
-                    [target_dir] * len(source_paths),
-                    [move] * len(source_paths),
-                ),
-                total=len(source_paths),
-            )
-        )
-    executor.shutdown(wait=True)
-    gc.collect()
+    for source_path in source_paths:
+        try:
+            transfer_file(source_path, target_dir, move)
+        except Exception as e:
+            print(f"Error transferring file {source_path}: {e}")
+            continue
+
 
 
 # Function to convert rgba to rgb
@@ -155,21 +148,12 @@ def convert_images_parallel(
         workers = num_workers
     print(f"Using {workers}/{os.cpu_count()} workers")
 
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        _ = list(
-            tqdm(
-                executor.map(
-                    convert_images,
-                    file_paths,
-                    [rgba_to_rgb] * len(file_paths),
-                    [rotate_image] * len(file_paths),
-                    original_folder_path,
-                ),
-                total=len(file_paths),
-            )
-        )
-    executor.shutdown(wait=True)
-    gc.collect()
+    for file_path, original_path in tqdm(zip(file_paths, original_folder_path), total=len(file_paths)):
+        try:
+            convert_images(file_path, rgba_to_rgb, rotate_image, original_path)
+        except Exception as e:
+            print(f"Error converting image {file_path}: {e}")
+            continue
 
 
 # Function to create mask from json
@@ -253,22 +237,12 @@ def create_mask_from_json_parallel(
         workers = num_workers
     print(f"Using {workers}/{os.cpu_count()} workers")
 
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        _ = list(
-            tqdm(
-                executor.map(
-                    create_mask_from_json,
-                    json_paths,
-                    mask_paths,
-                    [rgb] * len(json_paths),
-                    [multilabel] * len(json_paths),
-                    [plotted_pixels_key] * len(json_paths),
-                ),
-                total=len(json_paths),
-            )
-        )
-    executor.shutdown(wait=True)
-    gc.collect()
+    for json_path, mask_path in tqdm(zip(json_paths, mask_paths), total=len(json_paths)):
+        try:
+            create_mask_from_json(json_path, mask_path, rgb, multilabel, plotted_pixels_key)
+        except Exception as e:
+            print(f"Error creating mask for {json_path}: {e}")
+            continue
 
 
 # Run the code.

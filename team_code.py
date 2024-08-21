@@ -74,7 +74,7 @@ import torch.nn.functional as F
 
 # Log Neural CDE
 import torchdiffeq
-import roughpy
+# import roughpy
 
 # Own methods
 from helper_code import *
@@ -123,7 +123,7 @@ NC_CLASSIFICATION = 3
 
 # General digitization settings
 TRAIN_NNUNET = True
-MAX_NUM_IMAGES = 100
+MAX_NUM_IMAGES = 80
 X_FREQUENCY = 500
 NC = 3
 IMG_SIZE = (50, 500)
@@ -225,8 +225,10 @@ PATH_TO_CHECKPOINT = f"{os.getcwd()}/model/M3/nnUNet_results/Dataset500_Signals/
 NNUNET_RAW = f"{os.getcwd()}/data/ptb-xl"
 NNUNET_PREPROCESSED_TRAIN = f"{os.getcwd()}/model/nnUNet_preprocessed"
 NNUNET_RESULTS_TRAIN = f"{os.getcwd()}/model/nnUNet_results"
-NNUNET_PREPROCESSED_USE = NNUNET_PREPROCESSED_TRAIN # f"{os.getcwd()}/model/M3/nnUNet_preprocessed" # NNUNET_PREPROCESSED_TRAIN
-NNUNET_RESULTS_USE = NNUNET_RESULTS_TRAIN # f"{os.getcwd()}/model/M3/nnUNet_results" # NNUNET_RESULTS_TRAIN
+NNUNET_PREPROCESSED_TEST = f"{os.getcwd()}/model/M3/nnUNet_preprocessed"
+NNUNET_RESULTS_TEST = f"{os.getcwd()}/model/M3/nnUNet_results"
+NNUNET_PREPROCESSED_USE = NNUNET_PREPROCESSED_TRAIN # NNUNET_PREPROCESSED_TEST
+NNUNET_RESULTS_USE = NNUNET_RESULTS_TRAIN # NNUNET_RESULTS_TEST
 
 # TODO: Train on float rotated images
 # TODO: Lead boxes: Do we need separate models for lead and lead name? Should we use one box per line?
@@ -1739,32 +1741,69 @@ def predict_mask_nnunet(image, dataset_name):
     command_run = f"nnUNetv2_predict -d {dataset_name} -i {temp_folder_input} -o {temp_folder_output} -f all -tr nnUNetTrainer -c 2d -p nnUNetPlans"
     command_post_process = f"nnUNetv2_apply_postprocessing -i {temp_folder_output} -o {temp_folder_output_pp} -pp_pkl_file model/nnUNet_results/{dataset_name}/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/postprocessing.pkl -np 8 -plans_json model/nnUNet_results/{dataset_name}/nnUNetTrainer__nnUNetPlans__2d/crossval_results_folds_0/plans.json"
 
-    # Create temp folders:
-    os.makedirs(temp_folder_input, exist_ok=True)
-    os.makedirs(temp_folder_output, exist_ok=True)
-    os.makedirs(temp_folder_output_pp, exist_ok=True)
+    try:
+        # Set env variabels (nnUNet needs them to be set)
+        os.environ["nnUNet_raw"] = NNUNET_RAW
+        os.environ["nnUNet_preprocessed"] = NNUNET_PREPROCESSED_USE
+        os.environ["nnUNet_results"] = NNUNET_RESULTS_USE
 
-    # Set env variabels (nnUNet needs them to be set)
-    os.environ["nnUNet_raw"] = NNUNET_RAW
-    os.environ["nnUNet_preprocessed"] = NNUNET_PREPROCESSED_USE
-    os.environ["nnUNet_results"] = NNUNET_RESULTS_USE
+        # Create temp folders:
+        shutil.rmtree(temp_folder_input, ignore_errors=True)
+        shutil.rmtree(temp_folder_output, ignore_errors=True)
+        shutil.rmtree(temp_folder_output_pp, ignore_errors=True)
+        os.makedirs(temp_folder_input, exist_ok=True)
+        os.makedirs(temp_folder_output, exist_ok=True)
+        os.makedirs(temp_folder_output_pp, exist_ok=True)
 
-    # Save image
-    write_png(image, image_path_temp)
+        # Save image
+        write_png(image, image_path_temp)
 
-    # Run inference
-    subprocess.run(command_run, shell=True)
+        # Run inference
+        subprocess.run(command_run, shell=True)
 
-    # Run postprocessing
-    #subprocess.run(command_post_process, shell=True)
+        # Run postprocessing
+        #subprocess.run(command_post_process, shell=True)
 
-    # Load mask
-    mask = read_image(mask_path_temp)
+        # Load mask
+        mask = read_image(mask_path_temp)
 
-    # Delete all temporary folders and files
-    shutil.rmtree(temp_folder_input)
-    shutil.rmtree(temp_folder_output)
-    shutil.rmtree(temp_folder_output_pp)
+        # Delete all temporary folders and files
+        shutil.rmtree(temp_folder_input, ignore_errors=True)
+        shutil.rmtree(temp_folder_output, ignore_errors=True)
+        shutil.rmtree(temp_folder_output_pp, ignore_errors=True)
+        
+    except Exception as e:
+        print(f"Error in {image_path_temp}")
+        
+        # Set env variabels (nnUNet needs them to be set)
+        os.environ["nnUNet_raw"] = NNUNET_RAW
+        os.environ["nnUNet_preprocessed"] = NNUNET_PREPROCESSED_TEST
+        os.environ["nnUNet_results"] = NNUNET_RESULTS_TEST
+
+        # Create temp folders:
+        shutil.rmtree(temp_folder_input, ignore_errors=True)
+        shutil.rmtree(temp_folder_output, ignore_errors=True)
+        shutil.rmtree(temp_folder_output_pp, ignore_errors=True)
+        os.makedirs(temp_folder_input, exist_ok=True)
+        os.makedirs(temp_folder_output, exist_ok=True)
+        os.makedirs(temp_folder_output_pp, exist_ok=True)
+
+        # Save image
+        write_png(image, image_path_temp)
+
+        # Run inference
+        subprocess.run(command_run, shell=True)
+
+        # Run postprocessing
+        #subprocess.run(command_post_process, shell=True)
+
+        # Load mask
+        mask = read_image(mask_path_temp)
+
+        # Delete all temporary folders and files
+        shutil.rmtree(temp_folder_input, ignore_errors=True)
+        shutil.rmtree(temp_folder_output, ignore_errors=True)
+        shutil.rmtree(temp_folder_output_pp, ignore_errors=True)
 
     return mask
 
