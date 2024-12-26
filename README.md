@@ -1,5 +1,9 @@
 # Cleaned Python code for the George B. Moody PhysioNet Challenge 2024
 
+
+**This is the code version used for the Challenge. See the branch `cleanup` for a cleaned-up version.**
+
+
 ## What's in this repository?
 
 This repository contains a cleaned version of our team's code for the Python entry to the [George B. Moody PhysioNet Challenge 2024](https://physionetchallenges.org/2024/).
