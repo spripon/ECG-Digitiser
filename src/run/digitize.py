@@ -24,6 +24,9 @@ from config import (
     Y_SHIFT_RATIO,
     SIGNAL_UNITS,
     LEAD_LABEL_MAPPING,
+    FMT,
+    ADC_GAIN,
+    BASELINE,
 )
 
 
@@ -307,19 +310,31 @@ def run(args):
             )
 
         # Save Challenge outputs.
-        signals = np.array(
-            [
-                signals_predicted[signal_name].numpy()
-                for signal_name in LEAD_LABEL_MAPPING.keys()
-            ]
-        ).T
+        signals = [
+            signals_predicted[signal_name].numpy()
+            for signal_name in LEAD_LABEL_MAPPING.keys()
+        ]
+        num_samples = int(LONG_SIGNAL_LENGTH_SEC * FREQUENCY)
+        signal_list = []
+        for signal in signals:
+            if len(signal) < num_samples:
+                nan_signal = np.empty(num_samples)
+                nan_signal[:] = np.nan
+                nan_signal[: int(len(signal))] = signal
+                signal_list.append(nan_signal)
+            else:
+                signal_list.append(signal)
+        signals = np.array(signal_list).T
         wfdb.wrsamp(
             record,
             fs=FREQUENCY,
-            units=SIGNAL_UNITS,
-            sig_name=LEAD_LABEL_MAPPING.keys(),
-            p_signal=signals,
+            units=[SIGNAL_UNITS] * signals.shape[1],
+            sig_name=list(LEAD_LABEL_MAPPING.keys()),
+            p_signal=np.nan_to_num(signals),
             write_dir=args.output_folder,
+            fmt=[FMT] * signals.shape[1],
+            adc_gain=[ADC_GAIN] * signals.shape[1],
+            baseline=[BASELINE] * signals.shape[1],
         )
 
     if args.verbose:

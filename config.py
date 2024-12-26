@@ -1,9 +1,12 @@
-IMAGE_TYPE = "png"
-FREQUENCY = 500
-DATASET_NAME = "Dataset500_Signals"
-LONG_SIGNAL_LENGTH_SEC = 10
-SHORT_SIGNAL_LENGTH_SEC = 2.5
-SIGNAL_UNITS = "mV"
+IMAGE_TYPE = "png" # Image type for the dataset
+FREQUENCY = 500 # Sampling frequency of the signals
+DATASET_NAME = "Dataset500_Signals" # Name of the dataset
+LONG_SIGNAL_LENGTH_SEC = 10 # Length in seconds of the full signal
+SHORT_SIGNAL_LENGTH_SEC = 2.5 # Length in seconds of the cropped signal
+SIGNAL_UNITS = "mV" # Units of the signal for the y-axis
+FMT = '16' # Format of the signal
+ADC_GAIN = 1000.0 # ADC gain of the signal
+BASELINE = 0 # Baseline of the signal
 
 # Mapping of the lead labels to num for the segmentation model
 LEAD_LABEL_MAPPING = {
