@@ -1,27 +1,49 @@
 [![License](https://img.shields.io/badge/License-BSD_2--Clause-orange.svg)](https://opensource.org/licenses/BSD-2-Clause) [![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/combining-hough-transform-and-deep-learning/ecg-digitization-on-physionet-challenge-2024)](https://paperswithcode.com/sota/ecg-digitization-on-physionet-challenge-2024?p=combining-hough-transform-and-deep-learning)
 
-# Cleaned Python code for the George B. Moody PhysioNet Challenge 2024
+<h1 align='center'> ECG Digitiser – PhysioNet Challenge 2024 Winner<br> [<a href="https://arxiv.org/abs/2410.14185">arXiv Paper</a>] </h1>
 
-## What's in this repository?
+**ECG Digitiser** is the state-of-the-art solution for converting ECG printouts into digital signals, enabling effective data extraction from legacy medical records. Our method combines the Hough Transform with deep learning, and achieved 1st place in the George B. Moody PhysioNet Challenge 2024.
 
-This repository contains a cleaned version of our team's code for the Python entry to the [George B. Moody PhysioNet Challenge 2024](https://physionetchallenges.org/2024/).
-You can use it to digitize ECG images. It contains two main modules:
-1. Training the segmentation model.
-2. Running the digitization pipeline.
+This repository contains an open-source implementation, including:
 
+- ✅ **Digitisation scripts** with straightforward usage examples.
+- ✅ **Training scripts** for training [nnU-Net](https://github.com/MIC-DKFZ/nnUNet) to segment ECG printouts.
+- ✅ **Pretrained ECG segmentation models** for immediate use.
+- ✅ **Synthetic ECG Printout Generation** using [ecg-image-kit](https://github.com/alphanumericslab/ecg-image-kit) and the [PTB-XL dataset](https://www.nature.com/articles/s41597-020-0495-6).
 
-## What is contained?
+## 🚀 Quick Start
+```bash
+git clone https://github.com/felix-krones/ecg-digitiser.git
+cd ecg-digitiser
+pip install -r requirements.txt
+python digitize.py --image your_ecg_image.jpg --output digital_ecg.csv
+```
 
-- `ecg-image-generator`: Code to generate synthetic ECG images from the PTB-XL dataset.
-- `nnUNet`: Code of the segmentation model nnU-Net.
-- `src/run/run.py`: Code to run the digitization pipeline.
-- `models`: Trained models.
-- `config.py`: Configuration file.
-- `src/ptb_xl`: Code to prepare the PTB-XL dataset.
-- `src/utils`: Utility functions.
+## 🔍 Example Results
 
+### ECG Segmentation
+<p align="center">
+    <img src="./figures/segmentation.png" alt="ECG Segmentation Example" width="800"/>
+    <br><em>Example of ECG segmentation from a printed ECG image.</em>
+</p>
 
-## How do I get started?
+### ECG Vectorisation
+<p align="center">
+    <img src="./figures/vectorisation.png" alt="ECG Vectorisation Example" width="800"/>
+    <br><em>Example of vectorised ECG signal reconstructed from segmentation.</em>
+</p>
+
+## 🗂️ Repository Structure
+
+- `ecg-image-generator`: Generate synthetic ECG images using [ecg-image-kit](https://github.com/alphanumericslab/ecg-image-kit) and the [PTB-XL dataset](https://www.nature.com/articles/s41597-020-0495-6).
+- `nnUNet`: Segmentation model [nnU-Net](https://github.com/MIC-DKFZ/nnUNet).
+- `src/run/run.py`: Digitisation pipeline script.
+- `models`: Trained model weights.
+- `config.py`: Main configuration file.
+- `src/ptb_xl`: Prepare [PTB-XL dataset](https://www.nature.com/articles/s41597-020-0495-6).
+- `src/utils`: Helper functions.
+
+## ⚙️ Installation
 
 1. Clone this repository `git clone https://github.com/felixkrones/physionet24.git` and use the branch cleanup: `git checkout cleanup`
    
@@ -57,12 +79,7 @@ You can use it to digitize ECG images. It contains two main modules:
         pip install .
         cd ..
 
-5. Prepare the data as described below under `Data`.
-
-6. Run the code as decribed below under `Run`.
-
-
-## Data
+## 📚 Data
 
 To run the code, you need different kind of data.
 If you are using the PTB-XL dataset, see below under `Using the PTB-XL dataset` on how to prepare the data.
@@ -75,7 +92,7 @@ A folder containing the ECG images to be digitized. Those images should match th
 If you are using our pre-trained weights, those should match the images from the [2024 Challenge](https://physionetchallenges.org/2024/).
 
 
-## Using the PTB-XL dataset
+### Using the PTB-XL dataset
 
 1. Download (and unzip) the [PTB-XL dataset](https://physionet.org/content/ptb-xl/) and [PTB-XL+ dataset](https://physionet.org/content/ptb-xl-plus/).
 Replace the name of the folder (probably `ptb-xl-a-large-publicly-available-electrocardiography-dataset-1.0.3`) that contains a file named `ptbxl_database.csv` with `ptb-xl/`. 
@@ -165,7 +182,7 @@ Replace the paths below with the actual paths to the folders.
             --num_workers 8
 
 
-## Run
+## ▶️ Run
 
 You can either use our model weights for the segmentation model or train your own model following the steps under `1.` below.
 
@@ -226,30 +243,18 @@ where
 - `data_path` (input; required) is the folder containing the images to be digitized;
 - `model_path` (input; required) is the folder containing the segmentation model folder `nnUNet_results`, e.g., `models/M3`;
 - `output_path` is the folder where the outputs will be saved.
+- 
+## 📄 Citation and Acknowledgements
 
+If you use this code in your research, please cite our [paper](https://arxiv.org/abs/2410.14185):
 
-## How do I evaluate my model?
+    @article{krones2024combining,
+        title={Combining Hough Transform and Deep Learning Approaches to Reconstruct ECG Signals From Printouts},
+        author={Krones, Felix and Walker, Ben and Lyons, Terry and Mahdi, Adam},
+        journal={arXiv:2410.14185},
+        year={2024}
+    }
 
-Checkout hte [evaluation-2024 repository](https://github.com/physionetchallenges/evaluation-2024) for code on how to evaluate your model.
+    Krones F, Walker B, Lyons T, Mahdi A. Combining Hough Transform and Deep Learning Approaches to Reconstruct ECG Signals From Printouts. arXiv:2410.14185. 2024 Oct 18.
 
-
-## Credits
-
-- Please see the [Challenge website](https://physionetchallenges.org/2024/) for more details.
-
-- This code builds on the [PhysioNet 2024](https://github.com/physionetchallenges/python-example-2024) repo and the [ecg-image-kit](https://github.com/alphanumericslab/ecg-image-kit). Please cite both if using this code.
-
-- We used nnU-Net, please also cite them:
-
-        Isensee, F., Jaeger, P. F., Kohl, S. A., Petersen, J., & Maier-Hein, K. H. (2021). nnU-Net: a self-configuring method for deep learning-based biomedical image segmentation. Nature methods, 18(2), 203-211.
-
-- Last but not least, please cite us as well: 
-
-        @article{krones2024combining,
-            title={Combining Hough Transform and Deep Learning Approaches to Reconstruct ECG Signals From Printouts},
-            author={Krones, Felix and Walker, Ben and Lyons, Terry and Mahdi, Adam},
-            journal={arXiv:2410.14185},
-            year={2024}
-        }
-
-        Krones F, Walker B, Lyons T, Mahdi A. Combining Hough Transform and Deep Learning Approaches to Reconstruct ECG Signals From Printouts. arXiv:2410.14185. 2024 Oct 18.
+Additionally, please consider citing the [PhysioNet Challenge 2024](https://physionetchallenges.org/2024/), [ecg-image-kit](https://github.com/alphanumericslab/ecg-image-kit), [PTB-XL dataset](https://www.nature.com/articles/s41597-020-0495-6), and [nnU-Net](https://github.com/MIC-DKFZ/nnUNet).
