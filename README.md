@@ -1,6 +1,9 @@
-[![License](https://img.shields.io/badge/License-BSD_2--Clause-orange.svg)](https://opensource.org/licenses/BSD-2-Clause) [![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/combining-hough-transform-and-deep-learning/ecg-digitization-on-physionet-challenge-2024)](https://paperswithcode.com/sota/ecg-digitization-on-physionet-challenge-2024?p=combining-hough-transform-and-deep-learning)
+[![License](https://img.shields.io/badge/License-BSD_2--Clause-orange.svg)](https://opensource.org/licenses/BSD-2-Clause) 
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/combining-hough-transform-and-deep-learning/ecg-digitization-on-physionet-challenge-2024)](https://paperswithcode.com/sota/ecg-digitization-on-physionet-challenge-2024?p=combining-hough-transform-and-deep-learning)
+[![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3110/)
 
 <h1 align='center'> ECG Digitiser – PhysioNet Challenge Winner (2024)<br> [<a href="https://arxiv.org/abs/2410.14185">arXiv Paper</a>] </h1>
+
 
 **ECG Digitiser** is the state-of-the-art solution for converting ECG printouts into digital signals, enabling effective data extraction from legacy medical records. Our method combines the Hough Transform with deep learning, and achieved 1st place in the George B. Moody PhysioNet Challenge 2024.
 
@@ -11,13 +14,32 @@ This repository contains an open-source implementation, including:
 - ✅ **Pretrained ECG segmentation models** for immediate use.
 - ✅ **Synthetic ECG Printout Generation** using [ecg-image-kit](https://github.com/alphanumericslab/ecg-image-kit) and the [PTB-XL dataset](https://www.nature.com/articles/s41597-020-0495-6).
 
+
 ## 🚀 Quick Start
+
+### Install
 ```bash
 git clone https://github.com/felix-krones/ecg-digitiser.git
 cd ecg-digitiser
+git lfs install # If not already installed
+git lfs pull # Only to also pull the weights
+conda create -n ecgdig python=3.11 # Or any other package manager
+conda activate ecgdig
 pip install -r requirements.txt
-python digitize.py --image your_ecg_image.jpg --output digital_ecg.csv
 ```
+
+At the moment, the official [nnU-Net](https://github.com/felixkrones/nnUNet.git) repository contains a bug and is not working with RGB png images. Please use the following for now:
+```bash
+cd nnUNet
+pip install .
+cd ..
+```
+
+### Use
+```bash
+python -m src.run.digitize -d data_folder -o output_folder
+```
+
 
 ## 🔍 Example Results
 
@@ -33,51 +55,18 @@ python digitize.py --image your_ecg_image.jpg --output digital_ecg.csv
     <br><em>Example of vectorised ECG signal reconstructed from segmentation.</em>
 </p>
 
+
 ## 🗂️ Repository Structure
 
 - `ecg-image-generator`: Generate synthetic ECG images using [ecg-image-kit](https://github.com/alphanumericslab/ecg-image-kit) and the [PTB-XL dataset](https://www.nature.com/articles/s41597-020-0495-6).
-- `nnUNet`: Segmentation model [nnU-Net](https://github.com/MIC-DKFZ/nnUNet).
-- `src/run/run.py`: Digitisation pipeline script.
+- `figures`: Example images for the README.
 - `models`: Trained model weights.
+- `nnUNet`: Segmentation model [nnU-Net](https://github.com/MIC-DKFZ/nnUNet).
 - `config.py`: Main configuration file.
+- `src/run/digitize.py`: Digitisation pipeline script.
 - `src/ptb_xl`: Prepare [PTB-XL dataset](https://www.nature.com/articles/s41597-020-0495-6).
 - `src/utils`: Helper functions.
 
-## ⚙️ Installation
-
-1. Clone this repository `git clone https://github.com/felixkrones/physionet24.git` and use the branch cleanup: `git checkout cleanup`
-   
-   If you want to get the pre-trained weights, before you clone it, you need to activate lfs:
-   ```git lfs install```
-
-    If it does not download the weights automatically, you can then use ```git lfs pull```
-
-2. Before you stage via git, make sure that you define which files should be handled via lfs:
-    ```git lfs track "*.pth"```
-   
-3. Move into the repo: `cd physionet24`
-
-4. Create a new environment:
-
-    Using pip:
-
-        python3.11 -m venv .venv
-        source .venv/bin/activate
-        pip install --upgrade pip
-        pip install -r requirements.txt
-
-    Using conda:
-
-        conda create --name env-name python=3.11
-        conda activate env-name
-        pip install --upgrade pip
-        pip install -r requirements.txt
-
-    At the moment, the official [nnU-Net](https://github.com/felixkrones/nnUNet.git) repository contains a bug and is not working with RGB png images. Please use the following for now:
-
-        cd nnUNet
-        pip install .
-        cd ..
 
 ## 📚 Data
 
@@ -243,7 +232,8 @@ where
 - `data_path` (input; required) is the folder containing the images to be digitized;
 - `model_path` (input; required) is the folder containing the segmentation model folder `nnUNet_results`, e.g., `models/M3`;
 - `output_path` is the folder where the outputs will be saved.
-- 
+
+
 ## 📄 Citation and Acknowledgements
 
 If you use this code in your research, please cite our [paper](https://arxiv.org/abs/2410.14185):
