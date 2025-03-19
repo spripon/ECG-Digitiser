@@ -3,6 +3,7 @@
 import argparse
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt
 import pandas as pd
 import os
 import shutil
@@ -45,7 +46,8 @@ def get_parser():
         "-m",
         "--model_folder",
         type=str,
-        required=True,
+        required=False,
+        default="models/M3/",
         help="Folder containing the nnUNet folder nnUNet_results.",
     )
     parser.add_argument(
@@ -55,8 +57,22 @@ def get_parser():
         required=True,
         help="Folder to save the digitized images.",
     )
-    parser.add_argument("-v", "--verbose", action="store_true")
-    parser.add_argument("-f", "--allow_failures", action="store_true")
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", default=True, help="Verbose output."
+    )
+    parser.add_argument(
+        "--show_image",
+        action="store_true",
+        default=False,
+        help="Show the image with the mask.",
+    )
+    parser.add_argument(
+        "-f",
+        "--allow_failures",
+        action="store_true",
+        default=False,
+        help="Allow failures.",
+    )
     return parser
 
 
@@ -146,37 +162,33 @@ def predict_mask_nnunet(image, dataset_name, model_folder):
     # Define temporary folders and paths
     temp_folder_input = "data/temp_nnUNet_input"
     temp_folder_output = "data/temp_nnUNet_output"
-    temp_folder_output_pp = "data/temp_nnUNet_output_pp"
     image_path_temp = os.path.join(temp_folder_input, "00000_temp_0000.png")
     mask_path_temp = os.path.join(temp_folder_output, "00000_temp.png")
-
-    # Define run commands
-    command_run = f"nnUNetv2_predict -d {dataset_name} -i {temp_folder_input} -o {temp_folder_output} -f all -tr nnUNetTrainer -c 2d -p nnUNetPlans"
 
     # Set env variabels (nnUNet needs them to be set)
     os.environ["nnUNet_results"] = os.path.join(model_folder, "nnUNet_results")
 
-    # Create temp folders:
+    # Create temp folders and copy image
     shutil.rmtree(temp_folder_input, ignore_errors=True)
     shutil.rmtree(temp_folder_output, ignore_errors=True)
-    shutil.rmtree(temp_folder_output_pp, ignore_errors=True)
     os.makedirs(temp_folder_input, exist_ok=True)
     os.makedirs(temp_folder_output, exist_ok=True)
-    os.makedirs(temp_folder_output_pp, exist_ok=True)
-
-    # Save image
     write_png(image, image_path_temp)
 
     # Run inference
+    if torch.cuda.is_available():
+        command_run = f"nnUNetv2_predict -d {dataset_name} -i {temp_folder_input} -o {temp_folder_output} -f all -tr nnUNetTrainer -c 2d -p nnUNetPlans"
+    else:
+        print("CUDA not available. Running on CPU.")
+        command_run = f"nnUNetv2_predict -d {dataset_name} -i {temp_folder_input} -o {temp_folder_output} -f all -tr nnUNetTrainer -c 2d -p nnUNetPlans -device cpu --verbose"
     subprocess.run(command_run, shell=True)
 
-    # Load mask
+    # Get masks
     mask = read_image(mask_path_temp)
 
     # Delete all temporary folders and files
     shutil.rmtree(temp_folder_input, ignore_errors=True)
     shutil.rmtree(temp_folder_output, ignore_errors=True)
-    shutil.rmtree(temp_folder_output_pp, ignore_errors=True)
 
     return mask
 
@@ -201,15 +213,21 @@ def cut_binary(mask_to_use, image_rotated):
     mask_values = list(pd.Series(mask_to_use.numpy().flatten()).value_counts().index)
     possible_lead_names = LEAD_LABEL_MAPPING
     lead_names_in_mask = {
-        k: v for k, v in possible_lead_names.items() if v in mask_values
+        k: v
+        for k, v in possible_lead_names.items()  # if v in mask_values
     }
     for lead_name, lead_value in lead_names_in_mask.items():
         binary_mask = torch.where(mask_to_use == lead_value, 1, 0)
-        signal_img, y1 = cut_to_mask(image_rotated, binary_mask, True)
-        signal_mask = cut_to_mask(binary_mask, binary_mask)
-        signal_images[lead_name] = signal_img
-        signal_masks[lead_name] = signal_mask
-        signal_positions[lead_name] = y1
+        if binary_mask.sum() > 0:
+            signal_img, y1 = cut_to_mask(image_rotated, binary_mask, True)
+            signal_mask = cut_to_mask(binary_mask, binary_mask)
+            signal_images[lead_name] = signal_img
+            signal_masks[lead_name] = signal_mask
+            signal_positions[lead_name] = y1
+        else:
+            signal_images[lead_name] = None
+            signal_masks[lead_name] = None
+            signal_positions[lead_name] = None
 
     return signal_masks, signal_positions, signal_images
 
@@ -254,6 +272,67 @@ def vectorise(
     return predicted_signal_sampled
 
 
+def save_plot_masks_and_signals(
+    image, masks, signals, sig_names, output_folder, filename="record.png"
+):
+    """
+    Saves the plot of different masks on top of the image in one subplot and the vectorised signals in another subplot.
+
+    Parameters:
+    - image: The original image (either grayscale or RGB).
+    - masks: Dictionary of masks for each lead.
+    - signals: 2D NumPy array of signals (time x leads).
+    - sig_names: List of signal names corresponding to each column in signals.
+    - output_folder: Path to the output folder where the image will be saved.
+    - filename: Name of the output image file (default: "record.png").
+    """
+    fig, axs = plt.subplots(2, 1, figsize=(10, 12), gridspec_kw={"height_ratios": [1, 2]})
+
+    # Convert PyTorch tensor to NumPy if needed
+    if hasattr(image, "numpy"):
+        image = image.numpy()
+
+    # Remove singleton channel if the image is (1, H, W)
+    if image.ndim == 3 and image.shape[0] == 1:
+        image = image.squeeze(0)  # Remove first dimension to get (H, W)
+
+    # Convert (C, H, W) format to (H, W, C) if needed
+    if image.ndim == 3 and image.shape[0] in [3, 4]:  # Check if it's (C, H, W)
+        image = image.transpose(1, 2, 0)  # Convert to (H, W, C)
+
+    axs[0].imshow(image, cmap="gray")
+    for lead, mask in masks.items():
+        if mask is not None:
+            if mask.ndim == 3 and mask.shape[0] == 1:
+                mask = mask.squeeze(
+                    0
+                )  # Remove the first dimension (convert from (1, H, W) to (H, W))
+            axs[0].imshow(mask, cmap="jet", alpha=0.5)
+    axs[0].set_title("Masks overlayed on image")
+    axs[0].axis("off")
+
+    # Plot vectorised signals
+    time_axis = np.arange(signals.shape[0])  # Time indices
+    for i, signal in enumerate(signals.T):
+        axs[1].plot(time_axis, signal, label=sig_names[i])
+
+    axs[1].set_title("Vectorised signals")
+    axs[1].set_xlabel("Time")
+    axs[1].set_ylabel("Signal amplitude")
+    axs[1].legend()
+    axs[1].grid()
+
+    plt.tight_layout()
+
+    # Ensure the output folder exists
+    os.makedirs(output_folder, exist_ok=True)
+
+    # Save the figure
+    output_path = os.path.join(output_folder, filename)
+    plt.savefig(output_path, dpi=300)
+    plt.close(fig)
+
+
 # Run the code.
 def run(args):
     # Create a folder for the Challenge outputs if it does not already exist.
@@ -288,7 +367,9 @@ def run(args):
         )
 
         # Vecotrise
-        x_pixel_list = [v.shape[2] for v in signal_masks_cropped.values()]
+        x_pixel_list = [
+            v.shape[2] for v in signal_masks_cropped.values() if v is not None
+        ]
         x_pixel_list_median = np.median(x_pixel_list)
         x_pixel_list_below_2x_median_mean = np.mean(
             [v for v in x_pixel_list if v < 2 * x_pixel_list_median]
@@ -299,24 +380,28 @@ def run(args):
         mV_per_pixel = mm_per_pixel / 10
         signals_predicted = {}
         for lead, mask in signal_masks_cropped.items():
-            signals_predicted[lead] = vectorise(
-                image_rotated,
-                mask,
-                signal_positions_cropped[lead],
-                sec_per_pixel,
-                mV_per_pixel,
-                Y_SHIFT_RATIO,
-                lead,
-            )
+            if mask is not None:
+                signals_predicted[lead] = vectorise(
+                    image_rotated,
+                    mask,
+                    signal_positions_cropped[lead],
+                    sec_per_pixel,
+                    mV_per_pixel,
+                    Y_SHIFT_RATIO,
+                    lead,
+                )
+            else:
+                signals_predicted[lead] = None
 
         # Save Challenge outputs.
-        signals = [
-            signals_predicted[signal_name].numpy()
+        signals = {
+            signal_name: signals_predicted[signal_name].numpy()
             for signal_name in LEAD_LABEL_MAPPING.keys()
-        ]
+            if signals_predicted[signal_name] is not None
+        }
         num_samples = int(LONG_SIGNAL_LENGTH_SEC * FREQUENCY)
         signal_list = []
-        for signal in signals:
+        for signal in signals.values():
             if len(signal) < num_samples:
                 nan_signal = np.empty(num_samples)
                 nan_signal[:] = np.nan
@@ -324,18 +409,30 @@ def run(args):
                 signal_list.append(nan_signal)
             else:
                 signal_list.append(signal)
+        sig_names = list(signals.keys())
         signals = np.array(signal_list).T
         wfdb.wrsamp(
             record,
             fs=FREQUENCY,
             units=[SIGNAL_UNITS] * signals.shape[1],
-            sig_name=list(LEAD_LABEL_MAPPING.keys()),
+            sig_name=sig_names,
             p_signal=np.nan_to_num(signals),
             write_dir=args.output_folder,
             fmt=[FMT] * signals.shape[1],
             adc_gain=[ADC_GAIN] * signals.shape[1],
             baseline=[BASELINE] * signals.shape[1],
         )
+
+        if args.show_image:
+            print(f"Storing image of shape {image_rotated.shape}")
+            save_plot_masks_and_signals(
+                image_rotated,
+                signal_masks_cropped,
+                signals,
+                sig_names,
+                args.output_folder,
+                f"{record}.png",
+            )
 
     if args.verbose:
         print("Done.")
