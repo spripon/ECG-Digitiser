@@ -200,7 +200,7 @@ def cut_to_mask(img, mask, return_y1=False):
     x_min, x_max = coords[1].min().item(), coords[1].max().item()
     img = img[:, y_min : y_max + 1, x_min : x_max + 1]
     if return_y1:
-        return img, y_min
+        return img, y_min, x_min
     else:
         return img
 
@@ -219,11 +219,11 @@ def cut_binary(mask_to_use, image_rotated):
     for lead_name, lead_value in lead_names_in_mask.items():
         binary_mask = torch.where(mask_to_use == lead_value, 1, 0)
         if binary_mask.sum() > 0:
-            signal_img, y1 = cut_to_mask(image_rotated, binary_mask, True)
+            signal_img, y1, x1 = cut_to_mask(image_rotated, binary_mask, True)
             signal_mask = cut_to_mask(binary_mask, binary_mask)
             signal_images[lead_name] = signal_img
             signal_masks[lead_name] = signal_mask
-            signal_positions[lead_name] = y1
+            signal_positions[lead_name] = {"y1": y1, "x1": x1}
         else:
             signal_images[lead_name] = None
             signal_masks[lead_name] = None
@@ -273,63 +273,51 @@ def vectorise(
 
 
 def save_plot_masks_and_signals(
-    image, masks, signals, sig_names, output_folder, filename="record.png"
+    image, masks_cropped, mask_start_position, signals, sig_names, output_folder, filename="record.png"
 ):
-    """
-    Saves the plot of different masks on top of the image in one subplot and the vectorised signals in another subplot.
+    num_signals = signals.shape[1]
+    fig, axs = plt.subplots(
+        1 + num_signals, 1, 
+        figsize=(10, 2.5 * (1 + num_signals)),
+        gridspec_kw={'height_ratios': [4] + [1] * num_signals}
+    )
 
-    Parameters:
-    - image: The original image (either grayscale or RGB).
-    - masks: Dictionary of masks for each lead.
-    - signals: 2D NumPy array of signals (time x leads).
-    - sig_names: List of signal names corresponding to each column in signals.
-    - output_folder: Path to the output folder where the image will be saved.
-    - filename: Name of the output image file (default: "record.png").
-    """
-    fig, axs = plt.subplots(2, 1, figsize=(10, 12), gridspec_kw={"height_ratios": [1, 2]})
-
-    # Convert PyTorch tensor to NumPy if needed
     if hasattr(image, "numpy"):
         image = image.numpy()
-
-    # Remove singleton channel if the image is (1, H, W)
     if image.ndim == 3 and image.shape[0] == 1:
-        image = image.squeeze(0)  # Remove first dimension to get (H, W)
+        image = image.squeeze(0)
+    if image.ndim == 3 and image.shape[0] in [3, 4]:
+        image = image.transpose(1, 2, 0)
 
-    # Convert (C, H, W) format to (H, W, C) if needed
-    if image.ndim == 3 and image.shape[0] in [3, 4]:  # Check if it's (C, H, W)
-        image = image.transpose(1, 2, 0)  # Convert to (H, W, C)
+    mask_combined = np.zeros_like(image, dtype=np.uint8) if image.ndim == 2 else np.zeros(image.shape[:2], dtype=np.uint8)
+    for lead, mask_cropped in masks_cropped.items():
+        if mask_cropped is not None:
+            if mask_cropped.ndim == 3 and mask_cropped.shape[0] == 1:
+                mask_cropped = mask_cropped.squeeze(0)
+            start_row = mask_start_position[lead]["y1"]
+            start_col = mask_start_position[lead]["x1"]
+            mask_height, mask_width = mask_cropped.shape
+            mask_combined[start_row:start_row + mask_height, start_col:start_col + mask_width] = np.maximum(
+                mask_combined[start_row:start_row + mask_height, start_col:start_col + mask_width],
+                mask_cropped
+            )
 
-    axs[0].imshow(image, cmap="gray")
-    for lead, mask in masks.items():
-        if mask is not None:
-            if mask.ndim == 3 and mask.shape[0] == 1:
-                mask = mask.squeeze(
-                    0
-                )  # Remove the first dimension (convert from (1, H, W) to (H, W))
-            axs[0].imshow(mask, cmap="jet", alpha=0.5)
+    axs[0].imshow(image, cmap="gray" if image.ndim == 2 else None)
+    axs[0].imshow(mask_combined, cmap="jet", alpha=0.5)
     axs[0].set_title("Masks overlayed on image")
     axs[0].axis("off")
 
-    # Plot vectorised signals
-    time_axis = np.arange(signals.shape[0])  # Time indices
+    time_axis = np.arange(signals.shape[0])
     for i, signal in enumerate(signals.T):
-        axs[1].plot(time_axis, signal, label=sig_names[i])
-
-    axs[1].set_title("Vectorised signals")
-    axs[1].set_xlabel("Time")
-    axs[1].set_ylabel("Signal amplitude")
-    axs[1].legend()
-    axs[1].grid()
+        axs[i + 1].plot(time_axis, signal)
+        axs[i + 1].set_title(sig_names[i])
+        axs[i + 1].set_xlabel("Time")
+        axs[i + 1].set_ylabel("Signal amplitude")
+        axs[i + 1].grid()
 
     plt.tight_layout()
-
-    # Ensure the output folder exists
     os.makedirs(output_folder, exist_ok=True)
-
-    # Save the figure
-    output_path = os.path.join(output_folder, filename)
-    plt.savefig(output_path, dpi=300)
+    plt.savefig(os.path.join(output_folder, filename), dpi=300)
     plt.close(fig)
 
 
@@ -384,7 +372,7 @@ def run(args):
                 signals_predicted[lead] = vectorise(
                     image_rotated,
                     mask,
-                    signal_positions_cropped[lead],
+                    signal_positions_cropped[lead]["y1"],
                     sec_per_pixel,
                     mV_per_pixel,
                     Y_SHIFT_RATIO,
@@ -411,6 +399,26 @@ def run(args):
                 signal_list.append(signal)
         sig_names = list(signals.keys())
         signals = np.array(signal_list).T
+
+        if args.show_image:
+            print(f"Storing image of shape {image_rotated.shape}")
+            save_plot_masks_and_signals(
+                image_rotated,
+                signal_masks_cropped,
+                signal_positions_cropped,
+                signals,
+                sig_names,
+                args.output_folder,
+                f"{record}.png",
+            )
+
+        if args.verbose:
+            print(f"Storing signals for record {record} with shape {signals.shape}")
+        if (np.nanmax(signals) > 10) or (np.nanmin(signals) < -10):
+            print(f"Signal out of range for record {record}, normalizing to range between 1 and -1")
+            max_val = np.nanmax(signals)
+            min_val = np.nanmin(signals)
+            signals = (signals - min_val) / (max_val - min_val) * 2 - 1
         wfdb.wrsamp(
             record,
             fs=FREQUENCY,
@@ -422,17 +430,6 @@ def run(args):
             adc_gain=[ADC_GAIN] * signals.shape[1],
             baseline=[BASELINE] * signals.shape[1],
         )
-
-        if args.show_image:
-            print(f"Storing image of shape {image_rotated.shape}")
-            save_plot_masks_and_signals(
-                image_rotated,
-                signal_masks_cropped,
-                signals,
-                sig_names,
-                args.output_folder,
-                f"{record}.png",
-            )
 
     if args.verbose:
         print("Done.")
